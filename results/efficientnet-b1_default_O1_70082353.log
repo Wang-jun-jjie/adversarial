@@ -1,0 +1,7 @@
+[2021/06/28 11:32:51] - Namespace(resume=False, sess='default', seed=70082353, batch_size=120, epochs=2, image_size=256, image_crop=224, data_directory='../ImageNet', opt_level='O1', model_name='efficientnet-b1')
+[2021/06/28 11:32:51] - Epoch 	 Seconds 	 	 Train Loss 	 Train Acc
+[2021/06/28 12:18:22] -     0 	  2731.5 	 	   698.0217 	    4.0406
+[2021/06/28 13:03:55] -     1 	  2732.3 	 	   533.1273 	   15.0172
+[2021/06/28 13:03:55] - Total train time: 91.0737 minutes
+[2021/06/28 13:03:55] - Test Loss 	 Test Acc
+[2021/06/28 13:04:38] -       nan 	  20.7011
