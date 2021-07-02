@@ -1,0 +1,4 @@
+[2021/07/03 05:31:49] - Namespace(resume=False, prefix='Adversarial attacks', seed=59572406, batch_size=64, iteration=20, step_size=0.005, epsilon=1, kernel_size=13, image_size=256, image_crop=224, data_directory='../ImageNet', opt_level='O0')
+[2021/07/03 05:31:49] - Clean Model Accuracy 	 Model Accuracy on Adversary
+[2021/07/03 05:32:41] -              72.6562 	                      0.0000
+[2021/07/03 05:32:41] - Total train time: 0.8649 minutes

@@ -33,3 +33,8 @@ def get_loaders(data_directory, batch_size, image_size, image_crop):
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size,\
         shuffle=True, drop_last=True, num_workers=8, pin_memory=True)
     return train_loader, test_loader
+
+def normalize(image, batch_size):
+    mean = torch.tensor(imagenet_mean).reshape(1, 3, 1, 1).repeat(batch_size, 1, 1, 1).to(device)
+    std = torch.tensor(imagenet_std).reshape(1, 3, 1, 1).repeat(batch_size, 1, 1, 1).to(device)
+    return (image-mean)/ std

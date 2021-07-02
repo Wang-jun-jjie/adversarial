@@ -18,20 +18,20 @@ from apex import amp
 # math and showcase
 import matplotlib.pyplot as plt
 import numpy as np
+
 from utils import *
 
 parser = argparse.ArgumentParser( description='Adversarial training')
 parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
-parser.add_argument('--sess',               default='default',    type=str,   help='session id')
+parser.add_argument('--prefix',             default='default',    type=str,   help='prefix used to define logs')
 parser.add_argument('--seed',               default=70082353,     type=int,   help='random seed')
-parser.add_argument('--batch_size', '-b',   default=120,          type=int,   help='mini-batch size (default: 120)')
+parser.add_argument('--batch-size', '-b',   default=120,          type=int,   help='mini-batch size (default: 120)')
 parser.add_argument('--epochs', '-e',       default=20 ,           type=int,   help='number of total epochs to run')
 parser.add_argument('--image-size', '--is', default=256,          type=int,   help='resize input image (default: 256 for ImageNet)')
 parser.add_argument('--image-crop', '--ic', default=224,          type=int,   help='centercrop input image after resize (default: 224 for ImageNet)')
 parser.add_argument('--data-directory',     default='../ImageNet',type=str,   help='dataset inputs root directory')
 # parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
 parser.add_argument('--opt-level', '-o',    default='O1',         type=str,   help='Nvidia apex optimation level (default: O1)')
-parser.add_argument('--model-name', '-m',   default='efficientnet-b1', type=str, help='Specify the varient of the model ')
 args = parser.parse_args()
 
 def main():
@@ -59,7 +59,7 @@ def main():
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
         model, optimizer = amp.initialize(model, optimizer, opt_level=args.opt_level)
 
-        checkpoint = torch.load('./checkpoint/' + args.sess + '_' + str(args.seed) + '.pth')
+        checkpoint = torch.load('./checkpoint/' + args.prefix + '_' + str(args.seed) + '.pth')
         prev_acc = checkpoint['acc']
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -79,7 +79,7 @@ def main():
     if not os.path.exists(result_folder):
         os.makedirs(result_folder)
     logger = logging.getLogger(__name__)
-    logname = args.model_name + '_' + args.sess + \
+    logname = args.model_name + '_' + args.prefix + \
         '_' + args.opt_level + '_' + str(args.seed) + '.log'
     logfile = os.path.join(result_folder, logname)
     if os.path.exists(logfile):
@@ -145,7 +145,7 @@ def main():
         print('==> Saving..')
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        save_path = './checkpoint/' + args.sess + '_' + str(args.seed) + '.pth'
+        save_path = './checkpoint/' + args.prefix + '_' + str(args.seed) + '.pth'
         torch.save({
             'epoch': epoch,
             'acc': acc,
