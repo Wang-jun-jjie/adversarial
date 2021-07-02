@@ -1,0 +1,4 @@
+[2021/07/03 05:49:23] - Namespace(resume=False, prefix='targetattack208', seed=59572406, batch_size=120, target=208, rnd_target=False, iteration=20, step_size=0.005, epsilon=1, kernel_size=13, image_size=256, image_crop=224, data_directory='../ImageNet', opt_level='O1')
+[2021/07/03 05:49:23] - Clean Model Accuracy 	 Model Accuracy on Adversary
+[2021/07/03 05:50:42] -              72.9167 	                      0.2083
+[2021/07/03 05:50:42] - Total train time: 1.3169 minutes

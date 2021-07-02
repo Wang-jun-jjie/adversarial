@@ -1,0 +1,4 @@
+[2021/07/03 05:59:22] - Namespace(resume=False, prefix='newnontargetattack', seed=59572406, batch_size=120, target=None, rnd_target=True, iteration=20, step_size=0.005, epsilon=1, kernel_size=13, image_size=256, image_crop=224, data_directory='../ImageNet', opt_level='O1')
+[2021/07/03 05:59:22] - Clean Model Accuracy 	 Model Accuracy on Adversary
+[2021/07/03 06:00:41] -              72.9167 	                      0.1389
+[2021/07/03 06:00:41] - Total train time: 1.3079 minutes

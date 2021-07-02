@@ -25,6 +25,8 @@ parser.add_argument('--resume', '-r',       action='store_true',              he
 parser.add_argument('--prefix',             default='Adversarial attacks',    type=str,   help='prefix used to define logs')
 parser.add_argument('--seed',               default=59572406,     type=int,   help='random seed')
 parser.add_argument('--batch-size', '-b',   default=120,          type=int,   help='mini-batch size (default: 120)')
+parser.add_argument('--target', '-t',       default=None,         type=int,   help='adversarial attack target label')
+parser.add_argument('--rnd-target', '--rt', action='store_true',              help='non-target attack using random label as target')
 parser.add_argument('--iteration', '-i',    default=20,           type=int,   help='adversarial attack iterations (default: 20)')
 parser.add_argument('--step-size', '--ss',  default=0.005,        type=float, help='step size for adversarial attacks')
 parser.add_argument('--epsilon', '-e',      default=1,            type=float, help='epsilon for adversarial attacks')
@@ -238,7 +240,7 @@ def main():
     logger.info(args)
 
     #Attack
-    def aet_attack(target_to=None, away_from_target=True):
+    def aet_attack(target_to=None, rnd_target=True):
         ignore, success, fail = 0, 0, 0
         correct, total = 0, 0
         model.eval()
@@ -254,6 +256,14 @@ def main():
                 total += target.size(0)
                 correct += (preds_top_class.view(target.shape) == target).sum().item()
 
+            # create random targets
+            if rnd_target == True:
+                while True:
+                    non_target = torch.randint(0, 1000, target.shape).to(device)
+                    collide = (target==non_target).sum().item()
+                    if collide == 0:
+                        break
+
             for i in range(args.iteration):
                 grids.requires_grad = True
                 distort_inputs = warper(normalize(data, args.batch_size), grids)
@@ -262,17 +272,12 @@ def main():
                 model.zero_grad()
                 warper.zero_grad()
                 if target_to == None: #non-target attack
-                    if away_from_target == True: # classic non-target attack
+                    if rnd_target == False: # classic non-target attack
                         loss = F.cross_entropy(output_logit, target)
                         loss.backward()
                         sign_data_grad = grids.grad.sign()
                         grids = grids + args.step_size * sign_data_grad # non-target attack
                     else: # random pick another target
-                        while True:
-                            non_target = torch.randint(0, 1000, target.shape).to(device)
-                            collide = (target==non_target).sum().item()
-                            if collide == 0:
-                                break
                         loss = F.cross_entropy(output_logit, non_target)
                         loss.backward()
                         sign_data_grad = grids.grad.sign()
@@ -301,10 +306,10 @@ def main():
     # Run
     logger.info('Clean Model Accuracy \t Model Accuracy on Adversary')
     start_train_time = time.time()
-    correct, success = aet_attack()
+    correct, success = aet_attack(args.target, args.rnd_target)
     logger.info('%20.4f \t %27.4f',correct, success)
     train_time = time.time()
     logger.info('Total train time: %.4f minutes', (train_time - start_train_time)/60)
-    print(correct, success)
+
 
 main()
