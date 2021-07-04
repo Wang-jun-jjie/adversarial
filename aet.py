@@ -275,22 +275,32 @@ def main():
                 if target_to == None: #non-target attack
                     if rnd_target == False: # classic non-target attack
                         loss = F.cross_entropy(output_logit, target)
-                        loss.backward()
+                        with amp.scale_loss(loss, optimizer) as scaled_loss:
+                            scaled_loss.backward()
+                        # loss.backward()
                         sign_data_grad = grids.grad.sign()
                         grids = grids + args.step_size * sign_data_grad # non-target attack
                     else: # random pick another target
                         loss = F.cross_entropy(output_logit, non_target)
-                        loss.backward()
+                        with amp.scale_loss(loss, optimizer) as scaled_loss:
+                            scaled_loss.backward()
+                        # loss.backward()
                         sign_data_grad = grids.grad.sign()
                         grids = grids - args.step_size * sign_data_grad
                 else: # targeted attack
                     target_lable = torch.full(target.shape, target_to).to(device)
                     loss = F.cross_entropy(output_logit, target_lable)
-                    loss.backward()
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                    # loss.backward()
                     sign_data_grad = grids.grad.sign()
                     grids = grids - args.step_size * sign_data_grad
                 grids = grids.detach_()
-
+            # if this batch has overflow gradients, discard it
+            unskipped_counter = amp._amp_state.loss_scalers[0]._unskipped
+            if unskipped_counter%(args.iteration+0) != 0 or unskipped_counter == 0:
+                amp._amp_state.loss_scalers[0]._unskipped = 0
+                continue
             # test the adversarial example
             with torch.no_grad():
                 # bind it back to image
@@ -300,7 +310,7 @@ def main():
                 distort_top_p, distort_top_class = preds_distort.topk(1, dim=1)
                 success += (distort_top_class.view(target.shape) == target).sum().item()
 
-            if batch_idx > 10: 
+            if batch_idx > 20: 
                 break
         return (100. * correct / total, 100. * success / total)
     
@@ -313,4 +323,4 @@ def main():
     logger.info('Total train time: %.4f minutes', (train_time - start_train_time)/60)
 
 
-# main()
+main()
