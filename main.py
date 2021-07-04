@@ -20,17 +20,32 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utils import *
+from aet import deforming_medium
 
 parser = argparse.ArgumentParser( description='Adversarial training')
 parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
-parser.add_argument('--prefix',             default='default',    type=str,   help='prefix used to define logs')
-parser.add_argument('--seed',               default=70082353,     type=int,   help='random seed')
+parser.add_argument('--prefix',             default='Adversarial training',    type=str,   help='prefix used to define logs')
+parser.add_argument('--seed',               default=59572406,     type=int,   help='random seed')
+
 parser.add_argument('--batch-size', '-b',   default=120,          type=int,   help='mini-batch size (default: 120)')
-parser.add_argument('--epochs', '-e',       default=20 ,           type=int,   help='number of total epochs to run')
+parser.add_argument('--epochs',             default=20 ,           type=int,   help='number of total epochs to run')
+
+parser.add_argument('--lr-min', default=0.05, type=float, help='minimum learning rate for optimizer')
+parser.add_argument('--lr-max', default=0.5, type=float, help='maximum learning rate for optimizer')
+parser.add_argument('--momentum', '--mm', default=0.9, type=float, help='momentum for optimizer')
+parser.add_argument('--weight-decay', '--wd', default=0.0001, type=float, help='weight decay for model training')
+
+parser.add_argument('--target', '-t',       default=None,         type=int,   help='adversarial attack target label')
+parser.add_argument('--rnd-target', '--rt', action='store_true',              help='non-target attack using random label as target')
+parser.add_argument('--iteration', '-i',    default=20,           type=int,   help='adversarial attack iterations (default: 20)')
+parser.add_argument('--step-size', '--ss',  default=0.005,        type=float, help='step size for adversarial attacks')
+parser.add_argument('--epsilon', '-e',      default=1,            type=float, help='epsilon for adversarial attacks')
+parser.add_argument('--kernel-size', '-k',  default=13,           type=int,   help='kernel size for adversarial attacks, must be odd integer')
+
 parser.add_argument('--image-size', '--is', default=256,          type=int,   help='resize input image (default: 256 for ImageNet)')
 parser.add_argument('--image-crop', '--ic', default=224,          type=int,   help='centercrop input image after resize (default: 224 for ImageNet)')
 parser.add_argument('--data-directory',     default='../ImageNet',type=str,   help='dataset inputs root directory')
-# parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
+parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
 parser.add_argument('--opt-level', '-o',    default='O1',         type=str,   help='Nvidia apex optimation level (default: O1)')
 args = parser.parse_args()
 
@@ -51,12 +66,16 @@ def main():
     #         classes.append(class_name)
     # classes = tuple(classes)
 
-    # Load model
+    # Load model and optimizer
+    model = models.resnet50(pretrained=False).to(device)
+    # Add weight decay into the model
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr_max,
+                                momentum=args.momentum,
+                                weight_decay=args.weight_decay)
+
     if args.resume:
         # Load checkpoint.
         print('==> Resuming from checkpoint..')
-        model = models.resnet50(pretrained=False).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
         model, optimizer = amp.initialize(model, optimizer, opt_level=args.opt_level)
 
         checkpoint = torch.load('./checkpoint/' + args.prefix + '_' + str(args.seed) + '.pth')
@@ -70,17 +89,18 @@ def main():
         print('==> Building model..')
         epoch_start = 0
         prev_acc = 0.0
-        model = models.resnet50(pretrained=False).to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
         model, optimizer = amp.initialize(model, optimizer, opt_level=args.opt_level)
+    warper = deforming_medium(args)
+    criterion = nn.CrossEntropyLoss().to(device)
+    # cyclic learning rate
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr_min, max_lr=args.lr_max)
 
     # Logger
     result_folder = './results/'
     if not os.path.exists(result_folder):
         os.makedirs(result_folder)
     logger = logging.getLogger(__name__)
-    logname = args.model_name + '_' + args.prefix + \
-        '_' + args.opt_level + '_' + str(args.seed) + '.log'
+    logname = args.prefix + '_' + args.opt_level + '_' + str(args.seed) + '.log'
     logfile = os.path.join(result_folder, logname)
     if os.path.exists(logfile):
         os.remove(logfile)
@@ -97,25 +117,73 @@ def main():
         print('\nEpoch: {:04}'.format(epoch))
         train_loss, correct, total = 0, 0, 0
         model.train()
+        warper.eval()
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
+            grids = warper.init_prim_grid().to(device)
+            
+            # create adversarial examples
+            if args.rnd_target == True:
+                while True:
+                    non_target = torch.randint(0, 1000, target.shape).to(device)
+                    collide = (target==non_target).sum().item()
+                    if collide == 0:
+                        break
+            for i in range(args.iteration):
+                grids.requires_grad = True
+                distort_inputs = warper(normalize(data, args.batch_size), grids)
+                output_logit = model(distort_inputs)
 
+                model.zero_grad()
+                warper.zero_grad()
+                if args.target == None: #non-target attack
+                    if args.rnd_target == False: # classic non-target attack
+                        loss = criterion(output_logit, target)
+                        with amp.scale_loss(loss, optimizer) as scaled_loss:
+                            scaled_loss.backward()
+                        # loss.backward()
+                        sign_data_grad = grids.grad.sign()
+                        grids = grids + args.step_size * sign_data_grad # non-target attack
+                    else: # random pick another target
+                        loss = criterion(output_logit, non_target)
+                        with amp.scale_loss(loss, optimizer) as scaled_loss:
+                            scaled_loss.backward()
+                        # loss.backward()
+                        sign_data_grad = grids.grad.sign()
+                        grids = grids - args.step_size * sign_data_grad
+                else: # targeted attack
+                    target_lable = torch.full(target.shape, args.target).to(device)
+                    loss = criterion(output_logit, target_lable)
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                    # loss.backward()
+                    sign_data_grad = grids.grad.sign()
+                    grids = grids - args.step_size * sign_data_grad
+                grids = grids.detach_()
+
+            # use adversarial examples to train the model
             optimizer.zero_grad()
-            output_logit = model(data)
-            loss = F.cross_entropy(output_logit, target)
+            distort_image = warper(normalize(data, args.batch_size), grids)
+            distort_logit = model(distort_image)
+            loss = criterion(distort_logit, target)
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
             # loss.backward()
             optimizer.step()
-            preds = F.softmax(output_logit, dim=1)
+            preds = F.softmax(distort_logit, dim=1)
             preds_top_p, preds_top_class = preds.topk(1, dim=1)
-
             train_loss += loss.item() * target.size(0)
             total += target.size(0)
             correct += (preds_top_class.view(target.shape) == target).sum().item()
-            # if batch_idx > 150:
+            # scheduler
+            unskipped_counter = amp._amp_state.loss_scalers[0]._unskipped
+            if unskipped_counter%(args.iteration+1) != 0 or unskipped_counter == 0:
+                amp._amp_state.loss_scalers[0]._unskipped = 0
+            else:
+                scheduler.step()
+            
+            # if batch_idx > 200:
             #     break
-
         return (train_loss / batch_idx, 100. * correct / total)
 
     # Test
@@ -135,8 +203,8 @@ def main():
                 test_loss += loss.item() * target.size(0)
                 total += target.size(0)
                 correct += (preds_top_class.view(target.shape) == target).sum().item()
-                # if batch_idx > 150:
-                #     break
+                if batch_idx > 200:
+                    break
         
         return (test_loss / batch_idx, 100. * correct / total)
             

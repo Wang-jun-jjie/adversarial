@@ -1,0 +1,6 @@
+[2021/07/04 20:16:11] - Namespace(resume=False, prefix='Adversarial training', seed=59572406, batch_size=120, epochs=20, lr_min=0.05, lr_max=0.5, momentum=0.9, weight_decay=0.0001, target=None, rnd_target=False, iteration=1, step_size=0.005, epsilon=1, kernel_size=13, image_size=256, image_crop=224, data_directory='../ImageNet', data_classname='../ImageNet/LOC_synset_mapping.txt', opt_level='O1')
+[2021/07/04 20:16:11] - Epoch 	 Seconds 	 	 Train Loss 	 Train Acc
+[2021/07/04 22:02:52] -     0 	  6400.8 	 	   688.7479 	    5.4326
+[2021/07/04 23:49:23] -     1 	  6391.0 	 	   531.1389 	   16.7900
+[2021/07/05 01:35:57] -     2 	  6392.4 	 	   483.7423 	   21.5461
+[2021/07/05 03:22:35] -     3 	  6396.5 	 	   461.6395 	   24.0604

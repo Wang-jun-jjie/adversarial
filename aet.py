@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms, models
 
-print('pytorch version: ' + torch.__version__)
+# print('pytorch version: ' + torch.__version__)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # NVIDIA apex
 from apex import amp
@@ -34,6 +34,7 @@ parser.add_argument('--kernel-size', '-k',  default=13,           type=int,   he
 parser.add_argument('--image-size', '--is', default=256,          type=int,   help='resize input image (default: 256 for ImageNet)')
 parser.add_argument('--image-crop', '--ic', default=224,          type=int,   help='centercrop input image after resize (default: 224 for ImageNet)')
 parser.add_argument('--data-directory',     default='../ImageNet',type=str,   help='dataset inputs root directory')
+parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
 parser.add_argument('--opt-level', '-o',    default='O1',         type=str,   help='Nvidia apex optimation level (default: O1)')
 args = parser.parse_args()
 
@@ -312,4 +313,4 @@ def main():
     logger.info('Total train time: %.4f minutes', (train_time - start_train_time)/60)
 
 
-main()
+# main()

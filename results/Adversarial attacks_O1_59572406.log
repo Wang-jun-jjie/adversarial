@@ -1,4 +1,6 @@
-[2021/07/03 05:46:26] - Namespace(resume=False, prefix='Adversarial attacks', seed=59572406, batch_size=120, target=None, rnd_target=False, iteration=20, step_size=0.005, epsilon=1, kernel_size=13, image_size=256, image_crop=224, data_directory='../ImageNet', opt_level='O1')
-[2021/07/03 05:46:26] - Clean Model Accuracy 	 Model Accuracy on Adversary
-[2021/07/03 05:47:45] -              72.9167 	                     10.9028
-[2021/07/03 05:47:45] - Total train time: 1.3155 minutes
+[2021/07/04 02:07:43] - Namespace(resume=False, prefix='Adversarial attacks', seed=59572406, batch_size=120, target=None, rnd_target=False, iteration=20, step_size=0.005, epsilon=1, kernel_size=13, image_size=256, image_crop=224, data_directory='../ImageNet', data_classname='../ImageNet/LOC_synset_mapping.txt', opt_level='O1')
+[2021/07/04 02:07:43] - Clean Model Accuracy 	 Model Accuracy on Adversary
+[2021/07/04 02:09:02] -              72.9167 	                     10.9028
+[2021/07/04 02:09:02] - Total train time: 1.3145 minutes
+[2021/07/04 02:09:05] - Namespace(resume=False, prefix='Adversarial training', seed=59572406, batch_size=120, target=None, rnd_target=False, iteration=20, step_size=0.005, epsilon=1, kernel_size=13, image_size=256, image_crop=224, data_directory='../ImageNet', data_classname='../ImageNet/LOC_synset_mapping.txt', opt_level='O1')
+[2021/07/04 02:09:05] - Epoch 	 Seconds 	 	 Train Loss 	 Train Acc
