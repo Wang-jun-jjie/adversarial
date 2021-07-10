@@ -20,7 +20,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utils import *
-# from aet import deforming_medium
 
 parser = argparse.ArgumentParser( description='Adversarial training')
 parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
@@ -28,7 +27,7 @@ parser.add_argument('--prefix',             default='Adversarial training',    t
 parser.add_argument('--seed',               default=59572406,     type=int,   help='random seed')
 
 parser.add_argument('--batch-size', '-b',   default=120,          type=int,   help='mini-batch size (default: 120)')
-parser.add_argument('--epochs',             default=20 ,           type=int,   help='number of total epochs to run')
+parser.add_argument('--epochs',             default=20,           type=int,   help='number of total epochs to run')
 
 parser.add_argument('--lr-min', default=0.05, type=float, help='minimum learning rate for optimizer')
 parser.add_argument('--lr-max', default=0.5, type=float, help='maximum learning rate for optimizer')
@@ -39,13 +38,13 @@ parser.add_argument('--target', '-t',       default=None,         type=int,   he
 parser.add_argument('--rnd-target', '--rt', action='store_true',              help='non-target attack using random label as target')
 parser.add_argument('--iteration', '-i',    default=20,           type=int,   help='adversarial attack iterations (default: 20)')
 parser.add_argument('--step-size', '--ss',  default=0.005,        type=float, help='step size for adversarial attacks')
-parser.add_argument('--epsilon', '-e',      default=1,            type=float, help='epsilon for adversarial attacks')
+parser.add_argument('--epsilon',            default=1,            type=float, help='epsilon for adversarial attacks')
 parser.add_argument('--kernel-size', '-k',  default=13,           type=int,   help='kernel size for adversarial attacks, must be odd integer')
 
 parser.add_argument('--image-size', '--is', default=256,          type=int,   help='resize input image (default: 256 for ImageNet)')
 parser.add_argument('--image-crop', '--ic', default=224,          type=int,   help='centercrop input image after resize (default: 224 for ImageNet)')
-parser.add_argument('--data-directory',     default='../ImageNet',type=str,   help='dataset inputs root directory')
-parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
+parser.add_argument('--data-directory',     default='../Restricted_ImageNet',type=str,   help='dataset inputs root directory')
+# parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
 parser.add_argument('--opt-level', '-o',    default='O1',         type=str,   help='Nvidia apex optimation level (default: O1)')
 args = parser.parse_args()
 
@@ -67,7 +66,7 @@ def main():
     # classes = tuple(classes)
 
     # Load model and optimizer
-    model = models.resnet50(pretrained=False).to(device)
+    model = models.resnet50(pretrained=False, num_classes=20).to(device)
     # Add weight decay into the model
     optimizer = torch.optim.SGD(model.parameters(), lr=args.lr_max,
                                 momentum=args.momentum,
@@ -247,5 +246,5 @@ def main():
 
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+main()

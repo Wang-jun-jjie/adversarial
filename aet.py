@@ -322,5 +322,4 @@ def main():
     train_time = time.time()
     logger.info('Total train time: %.4f minutes', (train_time - start_train_time)/60)
 
-
-main()
+# main()
