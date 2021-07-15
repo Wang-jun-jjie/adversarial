@@ -43,7 +43,7 @@ parser.add_argument('--kernel-size', '-k',  default=13,           type=int,   he
 
 parser.add_argument('--image-size', '--is', default=256,          type=int,   help='resize input image (default: 256 for ImageNet)')
 parser.add_argument('--image-crop', '--ic', default=224,          type=int,   help='centercrop input image after resize (default: 224 for ImageNet)')
-parser.add_argument('--data-directory',     default='../Restricted_ImageNet',type=str,   help='dataset inputs root directory')
+parser.add_argument('--data-directory',     default='../food-11',type=str,   help='dataset inputs root directory')
 # parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
 parser.add_argument('--opt-level', '-o',    default='O1',         type=str,   help='Nvidia apex optimation level (default: O1)')
 args = parser.parse_args()
@@ -66,7 +66,7 @@ def main():
     # classes = tuple(classes)
 
     # Load model and optimizer
-    model = models.resnet18(pretrained=False, num_classes=10).to(device)
+    model = models.resnet34(pretrained=False, num_classes=11).to(device)
     # Add weight decay into the model
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_max,
                                 # momentum=args.momentum,
@@ -250,5 +250,5 @@ def main():
 
 
 
-# if __name__ == "__main__":
-main()
+if __name__ == "__main__":
+    main()
