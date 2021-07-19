@@ -19,20 +19,20 @@ from apex import amp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils import *
+from utils.utils import get_loaders, deforming_medium
 
 parser = argparse.ArgumentParser( description='Adversarial training')
 parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
-parser.add_argument('--prefix',             default='Small adv. training test',    type=str,   help='prefix used to define logs')
+parser.add_argument('--prefix',             default='Small adv. training',    type=str,   help='prefix used to define logs')
 parser.add_argument('--seed',               default=59572406,     type=int,   help='random seed')
 
 parser.add_argument('--batch-size', '-b',   default=232,          type=int,   help='mini-batch size (default: 120)')
 parser.add_argument('--epochs',             default=20,           type=int,   help='number of total epochs to run')
 
-parser.add_argument('--lr-min', default=0.005, type=float, help='minimum learning rate for optimizer')
-parser.add_argument('--lr-max', default=0.05, type=float, help='maximum learning rate for optimizer')
-parser.add_argument('--momentum', '--mm', default=0.9, type=float, help='momentum for optimizer')
-parser.add_argument('--weight-decay', '--wd', default=0.0001, type=float, help='weight decay for model training')
+# parser.add_argument('--lr-min', default=0.005, type=float, help='minimum learning rate for optimizer')
+parser.add_argument('--lr-max', default=0.001, type=float, help='maximum learning rate for optimizer')
+# parser.add_argument('--momentum', '--mm', default=0.9, type=float, help='momentum for optimizer')
+# parser.add_argument('--weight-decay', '--wd', default=0.0001, type=float, help='weight decay for model training')
 
 parser.add_argument('--target', '-t',       default=None,         type=int,   help='adversarial attack target label')
 parser.add_argument('--rnd-target', '--rt', action='store_true',              help='non-target attack using random label as target')
@@ -41,8 +41,7 @@ parser.add_argument('--step-size', '--ss',  default=0.005,        type=float, he
 parser.add_argument('--epsilon',            default=1,            type=float, help='epsilon for adversarial attacks')
 parser.add_argument('--kernel-size', '-k',  default=13,           type=int,   help='kernel size for adversarial attacks, must be odd integer')
 
-parser.add_argument('--image-size', '--is', default=256,          type=int,   help='resize input image (default: 256 for ImageNet)')
-parser.add_argument('--image-crop', '--ic', default=224,          type=int,   help='centercrop input image after resize (default: 224 for ImageNet)')
+parser.add_argument('--image-size', '--is', default=224,          type=int,   help='image size (default: 224 for ImageNet)')
 parser.add_argument('--data-directory',     default='../Restricted_ImageNet',type=str,   help='dataset inputs root directory')
 # parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
 parser.add_argument('--opt-level', '-o',    default='O1',         type=str,   help='Nvidia apex optimation level (default: O1)')
@@ -54,16 +53,7 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     # load dataset (Imagenet)
-    train_loader, test_loader = get_loaders(args.data_directory, args.batch_size, \
-                                            args.image_size, args.image_crop)
-    # load the class label (Imagenet)
-    # classPath = args.data_classname
-    # classes = list()
-    # with open(classPath) as class_file:
-    #     for line in class_file:
-    #         class_name = line[10:].strip().split(',')[0]
-    #         classes.append(class_name)
-    # classes = tuple(classes)
+    train_loader, test_loader = get_loaders(args.data_directory, args.batch_size, )
 
     # Load model and optimizer
     model = models.resnet18(pretrained=False, num_classes=10).to(device)
@@ -72,11 +62,14 @@ def main():
                                 # momentum=args.momentum,
                                 # weight_decay=args.weight_decay
                                 )
-
+    optimizer2 = torch.optim.Adam(model.parameters(), lr=args.lr_max,
+                                # momentum=args.momentum,
+                                # weight_decay=args.weight_decay
+                                )
     if args.resume:
         # Load checkpoint.
         print('==> Resuming from checkpoint..')
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.opt_level)
+        model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], opt_level=args.opt_level)
 
         checkpoint = torch.load('./checkpoint/' + args.prefix + '_' + str(args.seed) + '.pth')
         prev_acc = checkpoint['acc']
@@ -89,14 +82,14 @@ def main():
         print('==> Building model..')
         epoch_start = 0
         prev_acc = 0.0
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.opt_level)
+        model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], opt_level=args.opt_level)
     warper = deforming_medium(args)
     criterion = nn.CrossEntropyLoss().to(device)
     # cyclic learning rate
     # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=args.lr_min, max_lr=args.lr_max)
 
     # Logger
-    result_folder = './results/'
+    result_folder = './logs/'
     if not os.path.exists(result_folder):
         os.makedirs(result_folder)
     logger = logging.getLogger(__name__)
@@ -125,13 +118,13 @@ def main():
             # create adversarial examples
             if args.rnd_target == True:
                 while True:
-                    non_target = torch.randint(0, 1000, target.shape).to(device)
+                    non_target = torch.randint(0, 10, target.shape).to(device)
                     collide = (target==non_target).sum().item()
                     if collide == 0:
                         break
             for i in range(args.iteration):
                 grids.requires_grad = True
-                distort_inputs = warper(normalize(data, args.batch_size), grids)
+                distort_inputs = warper(data, grids)
                 output_logit = model(distort_inputs)
 
                 model.zero_grad()
@@ -139,22 +132,22 @@ def main():
                 if args.target == None: #non-target attack
                     if args.rnd_target == False: # classic non-target attack
                         loss = criterion(output_logit, target)
-                        with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        with amp.scale_loss(loss, optimizer2) as scaled_loss:
                             scaled_loss.backward()
                         # loss.backward()
                         sign_data_grad = grids.grad.sign()
                         grids = grids + args.step_size * sign_data_grad # non-target attack
                     else: # random pick another target
-                        loss = criterion(output_logit, non_target)
-                        with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        loss = criterion(output_logit, target)
+                        with amp.scale_loss(loss, optimizer2) as scaled_loss:
                             scaled_loss.backward()
                         # loss.backward()
                         sign_data_grad = grids.grad.sign()
                         grids = grids - args.step_size * sign_data_grad
                 else: # targeted attack
                     target_lable = torch.full(target.shape, args.target).to(device)
-                    loss = criterion(output_logit, target_lable)
-                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    loss = criterion(output_logit, target)
+                    with amp.scale_loss(loss, optimizer2) as scaled_loss:
                         scaled_loss.backward()
                     # loss.backward()
                     sign_data_grad = grids.grad.sign()
@@ -163,7 +156,7 @@ def main():
 
             # use adversarial examples to train the model
             optimizer.zero_grad()
-            distort_image = warper(normalize(data, args.batch_size), grids)
+            distort_image = warper(data, grids)
             distort_logit = model(distort_image)
             loss = criterion(distort_logit, target)
             with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -250,5 +243,5 @@ def main():
 
 
 
-# if __name__ == "__main__":
-main()
+if __name__ == "__main__":
+    main()
