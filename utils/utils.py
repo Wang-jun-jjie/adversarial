@@ -8,6 +8,19 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 imagenet_mean = (0.485, 0.456, 0.406)
 imagenet_std = (0.229, 0.224, 0.225)
 
+def normalize():
+    return transforms.Normalize(
+    mean=imagenet_mean, std=imagenet_std)
+def inv_normalize():
+    return transforms.Normalize(
+    mean= [-m/s for m, s in zip(imagenet_mean, imagenet_std)],
+    std= [1/s for s in imagenet_std])
+_normalize = transforms.Normalize(
+    mean=imagenet_mean, std=imagenet_std)
+inv_normalize = transforms.Normalize(
+    mean= [-m/s for m, s in zip(imagenet_mean, imagenet_std)],
+    std= [1/s for s in imagenet_std])
+
 def get_loaders(data_directory, batch_size, augment=True, N=2, M=9): # only support imagenet-size image
     print('==> Preparing dataset..')
     train_transform = transforms.Compose([
@@ -41,6 +54,7 @@ def get_loaders(data_directory, batch_size, augment=True, N=2, M=9): # only supp
 # note, why normalize image separately? because in attack phase we don't want the normalization mess with the attack budget
 # (epsilon / std) but someone just don't care, besides we don't use that measurement.
 # remove this has no impact on training time
+# Old normalize
 # def normalize(image, batch_size):
 #     mean = torch.tensor(imagenet_mean).reshape(1, 3, 1, 1).repeat(batch_size, 1, 1, 1).to(device)
 #     std = torch.tensor(imagenet_std).reshape(1, 3, 1, 1).repeat(batch_size, 1, 1, 1).to(device)
@@ -188,3 +202,18 @@ class deforming_medium(nn.Module):
         binding_grid = samp_grid.permute(0,2,3,1)
         distort_image = F.grid_sample(image, binding_grid, align_corners=True)
         return distort_image
+
+# adversarial attacks
+# modify from https://github.com/metehancekic/deep-illusion
+
+def FGSM(model, x, y, norm, eps):
+    """
+    Fast Gradient Sign Method
+    model: Neural Network to attack
+    x:     Input batches
+    y:     True labels
+    norm:  Attack norm, only inf norm and L2 norm 
+    eps:   Attack budget
+    """
+    perturb = torch.zeros_like(x, requires_grad=True)
+    output = model(x+perturb)

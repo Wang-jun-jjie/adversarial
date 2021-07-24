@@ -23,11 +23,11 @@ from utils.utils import get_loaders, deforming_medium
 
 parser = argparse.ArgumentParser( description='Adversarial training')
 parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
-parser.add_argument('--prefix',             default='Small adv. training',    type=str,   help='prefix used to define logs')
+parser.add_argument('--prefix',             default='res34 adv. training',    type=str,   help='prefix used to define logs')
 parser.add_argument('--seed',               default=59572406,     type=int,   help='random seed')
 
 parser.add_argument('--batch-size', '-b',   default=232,          type=int,   help='mini-batch size (default: 120)')
-parser.add_argument('--epochs',             default=20,           type=int,   help='number of total epochs to run')
+parser.add_argument('--epochs',             default=50,           type=int,   help='number of total epochs to run')
 
 # parser.add_argument('--lr-min', default=0.005, type=float, help='minimum learning rate for optimizer')
 parser.add_argument('--lr-max', default=0.001, type=float, help='maximum learning rate for optimizer')
@@ -56,7 +56,7 @@ def main():
     train_loader, test_loader = get_loaders(args.data_directory, args.batch_size, )
 
     # Load model and optimizer
-    model = models.resnet18(pretrained=False, num_classes=10).to(device)
+    model = models.resnet34(pretrained=False, num_classes=10).to(device)
     # Add weight decay into the model
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_max,
                                 # momentum=args.momentum,
