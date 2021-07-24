@@ -3,7 +3,7 @@ import logging
 import time
 # select GPU on the server
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]='0'
+os.environ["CUDA_VISIBLE_DEVICES"]='5'
 # pytorch related package 
 import torch
 import torch.nn as nn
@@ -22,7 +22,7 @@ import numpy as np
 
 from utils.utils import *
 
-parser = argparse.ArgumentParser( description='Adversarial training')
+parser = argparse.ArgumentParser( description='eval')
 # parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
 parser.add_argument('--prefix',             default='Small adv. training',    type=str,   help='prefix used to define logs')
 parser.add_argument('--seed',               default=59572406,     type=int,   help='random seed')
@@ -43,7 +43,7 @@ parser.add_argument('--epsilon',            default=1,            type=float, he
 parser.add_argument('--kernel-size', '-k',  default=13,           type=int,   help='kernel size for adversarial attacks, must be odd integer')
 
 parser.add_argument('--image-size', '--is', default=224,          type=int,   help='image size (default: 224 for ImageNet)')
-parser.add_argument('--data-directory',     default='../Restricted_ImageNet',type=str,   help='dataset inputs root directory')
+parser.add_argument('--data-directory',     default='/tmp2/dataset/Restricted_ImageNet',type=str,   help='dataset inputs root directory')
 # parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
 parser.add_argument('--opt-level', '-o',    default='O1',         type=str,   help='Nvidia apex optimation level (default: O1)')
 args = parser.parse_args()
@@ -85,7 +85,7 @@ def main():
     # reverse-normalization so the epsilon and alpha is correct
     for batch_idx, (data, target) in enumerate(test_loader):
         data = inv_normalize(data)
-        img = data[0,:,:,:].detach().cpu()
+        img = data[3,:,:,:].detach().cpu()
         save_image(img, 'test.png')
         break
 

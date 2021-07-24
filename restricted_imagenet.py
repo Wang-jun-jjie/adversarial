@@ -1,10 +1,16 @@
 import os 
 from distutils.dir_util import copy_tree
 
-trainingset_path='../ImageNet/train'
-validationset_path='../ImageNet/val'
-class_mapping='../ImageNet/LOC_synset_mapping.txt'
-output_path='../Restricted_ImageNet'
+# trainingset_path='../ImageNet/train'
+# validationset_path='../ImageNet/val'
+# class_mapping='../ImageNet/LOC_synset_mapping.txt'
+# output_path='../Restricted_ImageNet'
+
+# on the server
+trainingset_path='/tmp2/dataset/imagenet/ILSVRC/Data/CLS-LOC/train'
+validationset_path='/tmp2/dataset/imagenet/ILSVRC/Data/CLS-LOC/val'
+class_mapping='/tmp2/dataset/imagenet/LOC_synset_mapping.txt'
+output_path='/tmp2/dataset/Restricted_ImageNet'
 
 classes = list()
 with open(class_mapping) as class_file:
