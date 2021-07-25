@@ -57,6 +57,10 @@ def main():
     train_loader, test_loader = get_loaders(args.data_directory, args.batch_size, )
 
     # Load model and optimizer
+    norm_layer = Normalize_tops()
+    # model = nn.Sequential(norm_layer, 
+    #     models.resnet18(pretrained=False, num_classes=10)
+    # ).to(device)
     model = models.resnet18(pretrained=False, num_classes=10).to(device)
     # Add weight decay into the model
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_max,
@@ -69,7 +73,8 @@ def main():
                                 )
     # load the pre-train model
     print('==> Loading pre-trained model..')
-    model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], opt_level=args.opt_level)
+    model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], \
+        opt_level=args.opt_level, verbosity=0)
     checkpoint = torch.load('./checkpoint/' + args.prefix + '_' + str(args.seed) + '.pth')
     prev_acc = checkpoint['acc']
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -78,16 +83,47 @@ def main():
     # epoch_start = checkpoint['epoch'] + 1
     torch.set_rng_state(checkpoint['rng_state'])
 
+    # temporary ?
+    model = nn.Sequential(norm_layer, model).to(device)
     model.eval()
 
     # make something like evaluate_pgd(test_loader, model_test, args...)
 
     # reverse-normalization so the epsilon and alpha is correct
+    correct_normal, correct_adv, total = 0, 0, 0
     for batch_idx, (data, target) in enumerate(test_loader):
-        data = inv_normalize(data)
-        img = data[3,:,:,:].detach().cpu()
-        save_image(img, 'test.png')
-        break
+        data, target = data.to(device), target.to(device)
+        adv, delta = PGD(model, data, target, 8/255, 1/255, 20)
+        save_image(adv[0], 'test.png')
+        y_normal = model(data)
+        preds_normal = F.softmax(y_normal, dim=1)
+        preds_top_p, preds_top_class = preds_normal.topk(1, dim=1)
+        correct_normal += (preds_top_class.view(target.shape) == target).sum().item()
+        # print(preds_top_class)
+        y_adv = model(adv)
+        preds_adv = F.softmax(y_adv, dim=1)
+        preds_top_p, preds_top_class = preds_adv.topk(1, dim=1)
+        correct_adv += (preds_top_class.view(target.shape) == target).sum().item()
+        # print(preds_top_class)
+
+        total += target.size(0)
+        
+
+        # data = inv_normalize(data)
+        # data = data.to(device)
+        # y = model(data)
+        # preds = F.softmax(y, dim=1)
+        # preds_top_p, preds_top_class = preds.topk(1, dim=1)
+        # print(preds_top_class)
+        # print(target)
+        if batch_idx == 2:
+            save_image(adv[0], 'adv.png')
+            save_image(delta[0], 'delta.png')
+        # batch size cannot be 1
+        # pert = FGSM(model, data, target, 'inf', 8)
+        # only run 1 batch
+    print(correct_normal/total)
+    print(correct_adv/total)
 
 if __name__ == "__main__":
     main()

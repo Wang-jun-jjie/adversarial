@@ -8,33 +8,32 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 imagenet_mean = (0.485, 0.456, 0.406)
 imagenet_std = (0.229, 0.224, 0.225)
 
-def normalize():
-    return transforms.Normalize(
-    mean=imagenet_mean, std=imagenet_std)
-def inv_normalize():
-    return transforms.Normalize(
-    mean= [-m/s for m, s in zip(imagenet_mean, imagenet_std)],
-    std= [1/s for s in imagenet_std])
 _normalize = transforms.Normalize(
     mean=imagenet_mean, std=imagenet_std)
-inv_normalize = transforms.Normalize(
+_inv_normalize = transforms.Normalize(
     mean= [-m/s for m, s in zip(imagenet_mean, imagenet_std)],
     std= [1/s for s in imagenet_std])
+def normalize(x):
+    return _normalize(x)
+def inv_normalize(x):
+    return _inv_normalize(x)
 
 def get_loaders(data_directory, batch_size, augment=True, N=2, M=9): # only support imagenet-size image
     print('==> Preparing dataset..')
+    # move normalize into model, don't normalize here, 
+    # is better for classic adversarial attacks
     train_transform = transforms.Compose([
         transforms.Resize((256,256)),
         transforms.RandomResizedCrop(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize(imagenet_mean, imagenet_std), 
+        # transforms.Normalize(imagenet_mean, imagenet_std), 
     ])
     test_transform = transforms.Compose([
         transforms.Resize((256,256)),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
-        transforms.Normalize(imagenet_mean, imagenet_std),
+        # transforms.Normalize(imagenet_mean, imagenet_std),
     ])
     
     if augment:
@@ -50,16 +49,19 @@ def get_loaders(data_directory, batch_size, augment=True, N=2, M=9): # only supp
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size,\
         shuffle=True, drop_last=True, num_workers=12, pin_memory=True)
     return train_loader, test_loader
-    
-# note, why normalize image separately? because in attack phase we don't want the normalization mess with the attack budget
-# (epsilon / std) but someone just don't care, besides we don't use that measurement.
-# remove this has no impact on training time
-# Old normalize
-# def normalize(image, batch_size):
-#     mean = torch.tensor(imagenet_mean).reshape(1, 3, 1, 1).repeat(batch_size, 1, 1, 1).to(device)
-#     std = torch.tensor(imagenet_std).reshape(1, 3, 1, 1).repeat(batch_size, 1, 1, 1).to(device)
-#     return (image-mean)/ std
 
+class Normalize_tops(nn.Module):
+    def __init__(self, mean=imagenet_mean, std=imagenet_std):
+        super(Normalize_tops, self).__init__()
+        self.register_buffer('mean', torch.Tensor(mean))
+        self.register_buffer('std', torch.Tensor(std))
+    
+    def forward(self, x):
+        mean = self.mean.reshape(1, 3, 1, 1)
+        std = self.std.reshape(1, 3, 1, 1)
+        return (x-mean) / std
+
+# TODO: change it to the buffer
 class deforming_medium(nn.Module):
     def __init__(self, args):
         super(deforming_medium, self).__init__()
@@ -206,14 +208,93 @@ class deforming_medium(nn.Module):
 # adversarial attacks
 # modify from https://github.com/metehancekic/deep-illusion
 
-def FGSM(model, x, y, norm, eps):
+# https://github.com/Harry24k/adversarial-attacks-pytorch
+
+def FGSM(model, data, target, eps):
     """
     Fast Gradient Sign Method
-    model: Neural Network to attack
-    x:     Input batches
-    y:     True labels
-    norm:  Attack norm, only inf norm and L2 norm 
-    eps:   Attack budget
+    model:      Neural Network to attack
+    data:       Input batches
+    target:     True labels
+    eps:        Attack budget
     """
-    perturb = torch.zeros_like(x, requires_grad=True)
-    output = model(x+perturb)
+    data = data.clone().detach().to(device)
+    target = target.clone().detach().to(device)
+
+    criterion = nn.CrossEntropyLoss().to(device)
+    data.requires_grad = True
+    output = model(data)
+
+    loss = criterion(output, target)
+    # Update adversarial images
+    grad = torch.autograd.grad(loss, data, \
+        retain_graph=False, create_graph=False)[0]
+    adv = data + eps*grad.sign()
+    adv = torch.clamp(adv, min=0, max=1).detach()
+    return adv
+
+def IGSM(model, data, target, eps, alpha, iter=0):
+    '''
+    Iterative Gradient Sign Method
+    model:      Neural Network to attack
+    data:       Input batches
+    target:     True labels
+    eps:        Attack budget
+    alpha:      step per iteration
+    iter:       Number of iteration
+    '''
+    if iter == 0:
+        iter = int(min(eps*255 + 4, 1.25*eps*255))
+    data = data.clone().detach().to(device)
+    target = target.clone().detach().to(device)
+
+    criterion = nn.CrossEntropyLoss().to(device)
+    data_ori = data.clone().detach()
+
+    for i in range(iter):
+        data.requires_grad = True
+        output = model(data)
+        loss = criterion(output, target)
+        # Update adversarial images
+        grad = torch.autograd.grad(loss, data, \
+            retain_graph=False, create_graph=False)[0]
+        adv = data + alpha*grad.sign()
+        a = torch.clamp(data_ori - eps, min=0)
+        b = (adv >= a).float()*adv \
+            + (adv < a).float()*a
+        c = (b > data_ori+eps).float()*(data_ori+eps) \
+            + (b <= data_ori + eps).float()*b
+        adv = torch.clamp(c, max=1).detach()
+
+    return adv
+
+def PGD(model, data, target, eps, alpha, iter=20):
+    '''
+    Project Gradient Descent
+    model:      Neural Network to attack
+    data:       Input batches
+    target:     True labels
+    eps:        Attack budget
+    alpha:      step per iteration
+    iter:       Number of iteration
+    '''
+    data = data.clone().detach().to(device)
+    target = target.clone().detach().to(device)
+
+    criterion = nn.CrossEntropyLoss().to(device)
+    adv = data.clone().detach()
+    # Starting at a uniformly random point
+    adv = adv + torch.empty_like(adv).uniform_(-eps, eps)
+    adv = torch.clamp(adv, min=0, max=1).detach()
+
+    for i in range(iter):
+        adv.requires_grad = True
+        output = model(adv)
+        loss = criterion(output, target)
+        # Update adversarial images
+        grad = torch.autograd.grad(loss, adv, \
+            retain_graph=False, create_graph=False)[0]
+        adv = adv.detach() + alpha*grad.sign()
+        delta = torch.clamp(adv-data, min=-eps, max=eps)
+        adv = torch.clamp(data+delta, min=0, max=1).detach()
+    return adv, delta
