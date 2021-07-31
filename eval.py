@@ -86,6 +86,7 @@ def main():
     # temporary ?
     model = nn.Sequential(norm_layer, model).to(device)
     model.eval()
+    warper = deforming_medium(args)
 
     # make something like evaluate_pgd(test_loader, model_test, args...)
 
@@ -93,8 +94,10 @@ def main():
     correct_normal, correct_adv, total = 0, 0, 0
     for batch_idx, (data, target) in enumerate(test_loader):
         data, target = data.to(device), target.to(device)
-        adv, delta = PGD(model, data, target, 8/255, 1/255, 20)
-        save_image(adv[0], 'test.png')
+        
+        # adv = AET(model, warper, data, target, step=0.005, iter=20)
+        adv, delta = PGD(model, data, target, eps=8/255, alpha=1/255, iter=20)
+        
         y_normal = model(data)
         preds_normal = F.softmax(y_normal, dim=1)
         preds_top_p, preds_top_class = preds_normal.topk(1, dim=1)
@@ -107,6 +110,11 @@ def main():
         # print(preds_top_class)
 
         total += target.size(0)
+
+        if batch_idx == 5:
+            save_image(data[0], 'normal.png')
+            save_image(adv[0], 'adv.png')
+            save_image(delta[0]*8, 'delta.png')
         
 
         # data = inv_normalize(data)
@@ -116,9 +124,7 @@ def main():
         # preds_top_p, preds_top_class = preds.topk(1, dim=1)
         # print(preds_top_class)
         # print(target)
-        if batch_idx == 2:
-            save_image(adv[0], 'adv.png')
-            save_image(delta[0], 'delta.png')
+
         # batch size cannot be 1
         # pert = FGSM(model, data, target, 'inf', 8)
         # only run 1 batch

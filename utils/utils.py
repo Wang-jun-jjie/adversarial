@@ -298,3 +298,33 @@ def PGD(model, data, target, eps, alpha, iter=20):
         delta = torch.clamp(adv-data, min=-eps, max=eps)
         adv = torch.clamp(data+delta, min=0, max=1).detach()
     return adv, delta
+
+def AET(model, warper, data, target, step, iter=20):
+    '''
+    Accumulated Elastic Transform
+    model:      Neural Network to attack
+    data:       Input batches
+    target:     True labels
+    eps:        Attack budget
+    step:       step size per iteration
+    iter:       Number of iteration
+    '''
+    data = data.clone().detach().to(device)
+    grid = warper.init_prim_grid().detach().to(device)
+    target = target.clone().detach().to(device)
+
+    criterion = nn.CrossEntropyLoss().to(device)
+
+    for i in range(iter):
+        grid.requires_grad = True
+        adv = warper(data, grid)
+        output = model(adv)
+        loss = criterion(output, target)
+        # Update adversarial images
+        grad = torch.autograd.grad(loss, grid, \
+            retain_graph=False, create_graph=False)[0]
+        grid = grid + step*grad.sign()
+        grid = grid.detach()
+    # warp it back to image
+    adv = warper(data, grid)
+    return adv
