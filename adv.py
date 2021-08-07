@@ -3,7 +3,7 @@ import logging
 import time
 # select GPU on the server
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]='0'
+os.environ["CUDA_VISIBLE_DEVICES"]='7'
 # pytorch related package 
 import torch
 import torch.nn as nn
@@ -52,7 +52,7 @@ def main():
     torch.cuda.manual_seed(args.seed)
     # load dataset (Imagenet)
     train_loader, test_loader = get_loaders(args.data_directory, args.batch_size, \
-                                            augment=True)
+                                            image_size=args.image_size, augment=True)
 
     # Load model and optimizer
     model = models.resnet50(pretrained=False, num_classes=10).to(device)

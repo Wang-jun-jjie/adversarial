@@ -3,7 +3,7 @@ import logging
 import time
 # select GPU on the server
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]='0'
+os.environ["CUDA_VISIBLE_DEVICES"]='7'
 # pytorch related package 
 import torch
 import torch.nn as nn
@@ -19,7 +19,7 @@ from apex import amp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.utils import get_loaders, deforming_medium
+from utils.utils import get_loaders, deforming_medium, normalize, inv_normalize
 
 parser = argparse.ArgumentParser( description='Adversarial training')
 parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
@@ -53,7 +53,8 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
     # load dataset (Imagenet)
-    train_loader, test_loader = get_loaders(args.data_directory, args.batch_size, )
+    train_loader, test_loader = get_loaders(args.data_directory, args.batch_size, \
+                                            args.image_size, augment=True)
 
     # Load model and optimizer
     model = models.resnet34(pretrained=False, num_classes=10).to(device)
@@ -69,7 +70,8 @@ def main():
     if args.resume:
         # Load checkpoint.
         print('==> Resuming from checkpoint..')
-        model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], opt_level=args.opt_level)
+        model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], \
+            opt_level=args.opt_level, verbosity=0)
 
         checkpoint = torch.load('./checkpoint/' + args.prefix + '_' + str(args.seed) + '.pth')
         prev_acc = checkpoint['acc']
@@ -82,7 +84,8 @@ def main():
         print('==> Building model..')
         epoch_start = 0
         prev_acc = 0.0
-        model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], opt_level=args.opt_level)
+        model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], \
+            opt_level=args.opt_level, verbosity=0)
     warper = deforming_medium(args)
     criterion = nn.CrossEntropyLoss().to(device)
     # cyclic learning rate
@@ -175,7 +178,7 @@ def main():
             # else:
             #     scheduler.step()
             
-            # if batch_idx > 200:
+            # if batch_idx > 100:
             #     break
         return (train_loss / batch_idx, 100. * correct / total)
 
@@ -187,7 +190,6 @@ def main():
             for batch_idx, (data, target) in enumerate(test_loader):
                 data, target = data.to(device), target.to(device)
     
-                optimizer.zero_grad()
                 output_logit = model(data)
                 loss = F.cross_entropy(output_logit, target)
                 preds = F.softmax(output_logit, dim=1)
@@ -196,8 +198,9 @@ def main():
                 test_loss += loss.item() * target.size(0)
                 total += target.size(0)
                 correct += (preds_top_class.view(target.shape) == target).sum().item()
-                if batch_idx > 200:
-                    break
+                
+                # if batch_idx > 100:
+                #     break
         
         return (test_loss / batch_idx, 100. * correct / total)
             
@@ -217,30 +220,22 @@ def main():
             }, save_path)
     
     # Run
-    logger.info('Epoch \t Seconds \t \t Train Loss \t Train Acc')
+    logger.info('Epoch  Seconds    Train Loss  Train Acc    Test Loss  Test Acc')
     start_train_time = time.time()
     for epoch in range(epoch_start, args.epochs):
         start_epoch_time = time.time()
         
         train_loss, train_acc = train(epoch)
-        epoch_time = time.time()
-        logger.info('%5d \t %7.1f \t \t %10.4f \t %9.4f',
-            epoch, epoch_time - start_epoch_time, train_loss, train_acc)
-        logger.info('Test Loss \t Test Acc')
         test_loss, test_acc = test(epoch)
-        logger.info('%9.4f \t %8.4f', test_loss, test_acc)
+        epoch_time = time.time()
+        logger.info('%5d  %7.1f    %10.4f  %9.4f    %9.4f  %8.4f',
+            epoch, epoch_time - start_epoch_time, train_loss, train_acc, test_loss, test_acc)
         # Save checkpoint.
         if train_acc - prev_acc  > 0.1:
             prev_acc = train_acc
             checkpoint(train_acc, epoch)
     train_time = time.time()
     logger.info('Total train time: %.4f minutes', (train_time - start_train_time)/60)
-
-    # Evaluation
-    # logger.info('Test Loss \t Test Acc')
-    # test_loss, test_acc = test(epoch)
-    # logger.info('%9.4f \t %8.4f', test_loss, test_acc)
-
 
 
 if __name__ == "__main__":

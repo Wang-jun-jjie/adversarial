@@ -18,20 +18,18 @@ def normalize(x):
 def inv_normalize(x):
     return _inv_normalize(x)
 
-def get_loaders(data_directory, batch_size, augment=True, N=2, M=9): # only support imagenet-size image
+def get_loaders(data_directory, batch_size, image_size, augment=True, N=2, M=9): # only support imagenet-size image
     print('==> Preparing dataset..')
     # move normalize into model, don't normalize here, 
     # is better for classic adversarial attacks
     train_transform = transforms.Compose([
-        transforms.Resize((256,256)),
-        transforms.RandomResizedCrop(224),
+        transforms.Resize((image_size,image_size)),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         # transforms.Normalize(imagenet_mean, imagenet_std), 
     ])
     test_transform = transforms.Compose([
-        transforms.Resize((256,256)),
-        transforms.CenterCrop(224),
+        transforms.Resize((image_size,image_size)),
         transforms.ToTensor(),
         # transforms.Normalize(imagenet_mean, imagenet_std),
     ])
@@ -49,17 +47,6 @@ def get_loaders(data_directory, batch_size, augment=True, N=2, M=9): # only supp
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size,\
         shuffle=True, drop_last=True, num_workers=12, pin_memory=True)
     return train_loader, test_loader
-
-class Normalize_tops(nn.Module):
-    def __init__(self, mean=imagenet_mean, std=imagenet_std):
-        super(Normalize_tops, self).__init__()
-        self.register_buffer('mean', torch.Tensor(mean))
-        self.register_buffer('std', torch.Tensor(std))
-    
-    def forward(self, x):
-        mean = self.mean.reshape(1, 3, 1, 1)
-        std = self.std.reshape(1, 3, 1, 1)
-        return (x-mean) / std
 
 # TODO: change it to the buffer
 class deforming_medium(nn.Module):
