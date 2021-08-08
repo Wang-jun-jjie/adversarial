@@ -210,7 +210,7 @@ def FGSM(model, data, target, eps):
 
     criterion = nn.CrossEntropyLoss().to(device)
     data.requires_grad = True
-    output = model(data)
+    output = model(normalize(data))
 
     loss = criterion(output, target)
     # Update adversarial images
@@ -240,7 +240,7 @@ def IGSM(model, data, target, eps, alpha, iter=0):
 
     for i in range(iter):
         data.requires_grad = True
-        output = model(data)
+        output = model(normalize(data))
         loss = criterion(output, target)
         # Update adversarial images
         grad = torch.autograd.grad(loss, data, \
@@ -276,7 +276,7 @@ def PGD(model, data, target, eps, alpha, iter=20):
 
     for i in range(iter):
         adv.requires_grad = True
-        output = model(adv)
+        output = model(normalize(adv))
         loss = criterion(output, target)
         # Update adversarial images
         grad = torch.autograd.grad(loss, adv, \
@@ -305,7 +305,7 @@ def AET(model, warper, data, target, step, iter=20):
     for i in range(iter):
         grid.requires_grad = True
         adv = warper(data, grid)
-        output = model(adv)
+        output = model(normalize(adv))
         loss = criterion(output, target)
         # Update adversarial images
         grad = torch.autograd.grad(loss, grid, \

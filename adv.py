@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms, models
+from torchvision.utils import save_image
 
 print('pytorch version: ' + torch.__version__)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -19,17 +20,17 @@ from apex import amp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.utils import get_loaders, deforming_medium
+from utils.utils import get_loaders, deforming_medium, normalize, AET
 
 parser = argparse.ArgumentParser( description='Adversarial training')
 parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
 parser.add_argument('--prefix',             default='default',    type=str,   help='prefix used to define logs')
-parser.add_argument('--seed',               default=59572406,     type=int,   help='random seed')
+parser.add_argument('--seed',               default=6869,     type=int,   help='random seed')
 
-parser.add_argument('--batch-size', '-b',   default=160,          type=int,   help='mini-batch size (default: 120)')
+parser.add_argument('--batch-size', '-b',   default=160,          type=int,   help='mini-batch size (default: 160)')
 parser.add_argument('--epochs',             default=80,           type=int,   help='number of total epochs to run')
 # parser.add_argument('--lr-min', default=0.005, type=float, help='minimum learning rate for optimizer')
-parser.add_argument('--lr-max', default=0.001, type=float, help='maximum learning rate for optimizer')
+parser.add_argument('--lr-max', default=0.001, type=float, help='learning rate for optimizer')
 # parser.add_argument('--momentum', '--mm', default=0.9, type=float, help='momentum for optimizer')
 # parser.add_argument('--weight-decay', '--wd', default=0.0001, type=float, help='weight decay for model training')
 
@@ -52,7 +53,7 @@ def main():
     torch.cuda.manual_seed(args.seed)
     # load dataset (Imagenet)
     train_loader, test_loader = get_loaders(args.data_directory, args.batch_size, \
-                                            image_size=args.image_size, augment=True)
+                                            image_size=args.image_size, augment=False)
 
     # Load model and optimizer
     model = models.resnet50(pretrained=False, num_classes=10).to(device)
@@ -114,52 +115,29 @@ def main():
         warper.eval()
         for batch_idx, (data, target) in enumerate(train_loader):
             data, target = data.to(device), target.to(device)
-            grids = warper.init_prim_grid().to(device)
-            
-            # create adversarial examples
-            if args.rnd_target == True:
-                while True:
-                    non_target = torch.randint(0, 10, target.shape).to(device)
-                    collide = (target==non_target).sum().item()
-                    if collide == 0:
-                        break
+            '''
+            Accumulated Elastic Transform (apex)
+            '''
+            grid = warper.init_prim_grid().detach().to(device)
             for i in range(args.iteration):
-                grids.requires_grad = True
-                distort_inputs = warper(data, grids)
-                output_logit = model(distort_inputs)
-
-                model.zero_grad()
-                warper.zero_grad()
-                if args.target == None: #non-target attack
-                    if args.rnd_target == False: # classic non-target attack
-                        loss = criterion(output_logit, target)
-                        with amp.scale_loss(loss, optimizer2) as scaled_loss:
-                            scaled_loss.backward()
-                        # loss.backward()
-                        sign_data_grad = grids.grad.sign()
-                        grids = grids + args.step_size * sign_data_grad # non-target attack
-                    else: # random pick another target
-                        loss = criterion(output_logit, target)
-                        with amp.scale_loss(loss, optimizer2) as scaled_loss:
-                            scaled_loss.backward()
-                        # loss.backward()
-                        sign_data_grad = grids.grad.sign()
-                        grids = grids - args.step_size * sign_data_grad
-                else: # targeted attack
-                    target_lable = torch.full(target.shape, args.target).to(device)
-                    loss = criterion(output_logit, target)
-                    with amp.scale_loss(loss, optimizer2) as scaled_loss:
-                        scaled_loss.backward()
-                    # loss.backward()
-                    sign_data_grad = grids.grad.sign()
-                    grids = grids - args.step_size * sign_data_grad
-                grids = grids.detach_()
-
-            # use adversarial examples to train the model
-            optimizer.zero_grad()
-            distort_image = warper(data, grids)
-            distort_logit = model(distort_image)
+                grid.requires_grad = True
+                adv = warper(data, grid)
+                output = model(normalize(adv))
+                loss = criterion(output, target)
+                with amp.scale_loss(loss, optimizer2) as scaled_loss:
+                    scaled_loss.backward()
+                sign_data_grad = grid.grad.sign()
+                # Update adversarial images
+                grid = grid + args.step_size*sign_data_grad
+                grid = grid.detach_()
+            # warp it back to image
+            adv = warper(data, grid).detach()
+            '''
+            Adversarial training
+            '''
+            distort_logit = model(normalize(adv))
             loss = criterion(distort_logit, target)
+            optimizer.zero_grad()
             with amp.scale_loss(loss, optimizer) as scaled_loss:
                 scaled_loss.backward()
             # loss.backward()
@@ -170,14 +148,20 @@ def main():
             total += target.size(0)
             correct += (preds_top_class.view(target.shape) == target).sum().item()
             # scheduler
-            unskipped_counter = amp._amp_state.loss_scalers[0]._unskipped
+            # unskipped_counter = amp._amp_state.loss_scalers[0]._unskipped
             # if unskipped_counter%(args.iteration+1) != 0 or unskipped_counter == 0:
                 # amp._amp_state.loss_scalers[0]._unskipped = 0
             # else:
             #     scheduler.step()
             
-            # if batch_idx > 200:
-            #     break
+            if batch_idx > 50:
+                print('==> early break in training')
+                break
+            if batch_idx == 5:
+                save_image(data[0], 'picture/normal.png')
+                save_image(adv[0], 'picture/adv.png')
+                # save_image(delta[0]*8, 'delta.png')
+            
         return (train_loss / batch_idx, 100. * correct / total)
 
     # Test
@@ -188,15 +172,17 @@ def main():
             for batch_idx, (data, target) in enumerate(test_loader):
                 data, target = data.to(device), target.to(device)
     
-                output_logit = model(data)
-                loss = F.cross_entropy(output_logit, target)
+                output_logit = model(normalize(data))
+                loss = criterion(output_logit, target)
                 preds = F.softmax(output_logit, dim=1)
                 preds_top_p, preds_top_class = preds.topk(1, dim=1)
     
                 test_loss += loss.item() * target.size(0)
                 total += target.size(0)
                 correct += (preds_top_class.view(target.shape) == target).sum().item()
-                # if batch_idx > 200:
+
+                # if batch_idx > 50:
+                #     print('==> early break in testing')
                 #     break
         
         return (test_loss / batch_idx, 100. * correct / total)
