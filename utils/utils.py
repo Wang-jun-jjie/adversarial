@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision import datasets, transforms
 from utils.augment import RandAugment
+# NVIDIA apex
+from apex import amp
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 imagenet_mean = (0.485, 0.456, 0.406)
@@ -315,3 +317,59 @@ def AET(model, warper, data, target, step, iter=20):
     # warp it back to image
     adv = warper(data, grid)
     return adv
+
+def AET_apex(model, warper, data, target, optimizer, step, iter=20):
+    '''
+    Accumulated Elastic Transform (apex)
+    '''
+    data = data.clone().detach().to(device)
+    grid = warper.init_prim_grid().detach().to(device)
+    target = target.clone().detach().to(device)
+
+    criterion = nn.CrossEntropyLoss().to(device)
+
+    for i in range(iter):
+        grid.requires_grad = True
+        adv = warper(data, grid)
+        output = model(normalize(adv))
+        loss = criterion(output, target)
+        with amp.scale_loss(loss, optimizer) as scaled_loss:
+            scaled_loss.backward()
+        sign_data_grad = grid.grad.sign()
+        # Update adversarial images
+        grid = grid + step*sign_data_grad
+        grid = grid.detach_()
+    # warp it back to image
+    adv = warper(data, grid).detach()
+    return adv
+
+def PGD_apex(model, data, target, optimizer, eps, alpha, iter=20):
+    '''
+    Project Gradient Descent
+    model:      Neural Network to attack
+    data:       Input batches
+    target:     True labels
+    eps:        Attack budget
+    alpha:      step per iteration
+    iter:       Number of iteration
+    '''
+    data = data.clone().detach().to(device)
+    target = target.clone().detach().to(device)
+
+    criterion = nn.CrossEntropyLoss().to(device)
+    adv = data.clone().detach()
+    # Starting at a uniformly random point
+    adv = adv + torch.empty_like(adv).uniform_(-eps, eps)
+    adv = torch.clamp(adv, min=0, max=1).detach()
+
+    for i in range(iter):
+        adv.requires_grad = True
+        output = model(normalize(adv))
+        loss = criterion(output, target)
+        # Update adversarial images
+        with amp.scale_loss(loss, optimizer) as scaled_loss:
+            scaled_loss.backward()
+        adv = adv.detach() + alpha*adv.grad.sign()
+        delta = torch.clamp(adv-data, min=-eps, max=eps)
+        adv = torch.clamp(data+delta, min=0, max=1).detach_()
+    return adv, delta

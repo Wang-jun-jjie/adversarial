@@ -3,7 +3,7 @@ import logging
 import time
 # select GPU on the server
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]='3'
+os.environ["CUDA_VISIBLE_DEVICES"]='0'
 # pytorch related package 
 import torch
 import torch.nn as nn
@@ -20,12 +20,12 @@ from apex import amp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.utils import *
+from utils.utils import get_loaders, deforming_medium, normalize, PGD, AET, FGSM, AET_apex, PGD_apex
 
-parser = argparse.ArgumentParser( description='eval')
+parser = argparse.ArgumentParser(description='eval')
 # parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
-parser.add_argument('--prefix',             default='Small adv. training',    type=str,   help='prefix used to define logs')
-parser.add_argument('--seed',               default=59572406,     type=int,   help='random seed')
+parser.add_argument('--prefix',             default='default',    type=str,   help='prefix used to define logs')
+parser.add_argument('--seed',               default=6869,     type=int,   help='random seed')
 
 parser.add_argument('--batch-size', '-b',   default=160,          type=int,   help='mini-batch size (default: 120)')
 parser.add_argument('--epochs',             default=50,           type=int,   help='number of total epochs to run')
@@ -43,22 +43,10 @@ parser.add_argument('--epsilon',            default=1,            type=float, he
 parser.add_argument('--kernel-size', '-k',  default=13,           type=int,   help='kernel size for adversarial attacks, must be odd integer')
 
 parser.add_argument('--image-size', '--is', default=224,          type=int,   help='image size (default: 224 for ImageNet)')
-parser.add_argument('--data-directory',     default='/tmp2/dataset/Restricted_ImageNet',type=str,   help='dataset inputs root directory')
+parser.add_argument('--data-directory',     default='/tmp2/dataset/Restricted_ImageNet_A',type=str,   help='dataset inputs root directory')
 # parser.add_argument('--data-classname',     default='../ImageNet/LOC_synset_mapping.txt',type=str, help='dataset classname file')
-parser.add_argument('--opt-level', '-o',    default='O1',         type=str,   help='Nvidia apex optimation level (default: O1)')
+parser.add_argument('--opt-level', '-o',    default='O0',         type=str,   help='Nvidia apex optimation level (default: O1)')
 args = parser.parse_args()
-
-class Normalize_tops(nn.Module) :
-    def __init__(self, mean, std) :
-        super(Normalize_tops, self).__init__()
-        self.register_buffer('mean', torch.Tensor(mean))
-        self.register_buffer('std', torch.Tensor(std))
-        
-    def forward(self, input):
-        # Broadcasting
-        mean = self.mean.reshape(1, 3, 1, 1)
-        std = self.std.reshape(1, 3, 1, 1)
-        return (input - mean) / std
 
 def main():
     # Set seeds
@@ -70,10 +58,6 @@ def main():
                                             image_size=args.image_size, augment=True)
 
     # Load model and optimizer
-    norm_layer = Normalize_tops(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    # model = nn.Sequential(norm_layer, 
-    #     models.resnet50(pretrained=False, num_classes=10)
-    # ).to(device)
     model = models.resnet50(pretrained=False, num_classes=10).to(device)
     # Add weight decay into the model
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_max,
@@ -87,7 +71,7 @@ def main():
     # load the pre-train model
     print('==> Loading pre-trained model..')
     model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], \
-        opt_level=args.opt_level, verbosity=0)
+        opt_level=args.opt_level, verbosity=1)
     checkpoint = torch.load('./checkpoint/' + args.prefix + '.pth')
     prev_acc = checkpoint['acc']
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -96,7 +80,6 @@ def main():
     # epoch_start = checkpoint['epoch'] + 1
     torch.set_rng_state(checkpoint['rng_state'])
 
-    model = nn.Sequential(norm_layer, model).to(device)
     model.eval()
     warper = deforming_medium(args)
 
@@ -107,15 +90,18 @@ def main():
     for batch_idx, (data, target) in enumerate(test_loader):
         data, target = data.to(device), target.to(device)
         
-        # adv = AET(model, warper, data, target, step=0.005, iter=20)
-        adv, delta = PGD(model, data, target, eps=8/255, alpha=1/255, iter=20)
+        adv = AET(model, warper, data, target, step=0.005, iter=20)
+        # adv = AET_apex(model, warper, data, target, optimizer=optimizer2, step=0.005, iter=20)
+        # adv, delta = PGD(model, data, target, eps=8/255, alpha=1/255, iter=12)
+
+        # adv, delta = PGD_apex(model, data, target, optimizer=optimizer2, eps=8/255, alpha=0.5/255, iter=20)
         
-        y_normal = model(data)
+        y_normal = model(normalize(data))
         preds_normal = F.softmax(y_normal, dim=1)
         preds_top_p, preds_top_class = preds_normal.topk(1, dim=1)
         correct_normal += (preds_top_class.view(target.shape) == target).sum().item()
         # print(preds_top_class)
-        y_adv = model(adv)
+        y_adv = model(normalize(adv))
         preds_adv = F.softmax(y_adv, dim=1)
         preds_top_p, preds_top_class = preds_adv.topk(1, dim=1)
         correct_adv += (preds_top_class.view(target.shape) == target).sum().item()
@@ -124,9 +110,9 @@ def main():
         total += target.size(0)
 
         if batch_idx == 5:
-            save_image(data[0], 'normal.png')
-            save_image(adv[0], 'adv.png')
-            save_image(delta[0]*8, 'delta.png')
+            save_image(data[0], './picture/normal.png')
+            save_image(adv[0], './picture/adv.png')
+            # save_image(delta[0]*8, './picture/delta.png')
         
 
         # data = inv_normalize(data)

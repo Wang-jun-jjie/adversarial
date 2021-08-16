@@ -3,7 +3,7 @@ import logging
 import time
 # select GPU on the server
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]='7'
+os.environ["CUDA_VISIBLE_DEVICES"]='0'
 # pytorch related package 
 import torch
 import torch.nn as nn
@@ -20,9 +20,9 @@ from apex import amp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.utils import get_loaders, deforming_medium, normalize, AET
+from utils.utils import get_loaders, deforming_medium, normalize
 
-parser = argparse.ArgumentParser( description='Adversarial training')
+parser = argparse.ArgumentParser(description='Adversarial training')
 parser.add_argument('--resume', '-r',       action='store_true',              help='resume from checkpoint')
 parser.add_argument('--prefix',             default='default',    type=str,   help='prefix used to define logs')
 parser.add_argument('--seed',               default=6869,     type=int,   help='random seed')
@@ -42,7 +42,7 @@ parser.add_argument('--epsilon',            default=1,            type=float, he
 parser.add_argument('--kernel-size', '-k',  default=13,           type=int,   help='kernel size for adversarial attacks, must be odd integer')
 
 parser.add_argument('--image-size', '--is', default=224,          type=int,   help='image size (default: 224 for ImageNet)')
-parser.add_argument('--data-directory',     default='../Restricted_ImageNet',type=str,   help='dataset inputs root directory')
+parser.add_argument('--data-directory',     default='/tmp2/dataset/Restricted_ImageNet_A',type=str,   help='dataset inputs root directory')
 parser.add_argument('--opt-level', '-o',    default='O1',         type=str,   help='Nvidia apex optimation level (default: O1)')
 args = parser.parse_args()
 
@@ -53,7 +53,7 @@ def main():
     torch.cuda.manual_seed(args.seed)
     # load dataset (Imagenet)
     train_loader, test_loader = get_loaders(args.data_directory, args.batch_size, \
-                                            image_size=args.image_size, augment=False)
+                                            image_size=args.image_size, augment=True)
 
     # Load model and optimizer
     model = models.resnet50(pretrained=False, num_classes=10).to(device)
@@ -70,7 +70,7 @@ def main():
         # Load checkpoint.
         print('==> Resuming from checkpoint..')
         model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], \
-            opt_level=args.opt_level, verbosity=0)
+            opt_level=args.opt_level, verbosity=1)
 
         checkpoint = torch.load('./checkpoint/' + args.prefix + '.pth')
         prev_acc = checkpoint['acc']
@@ -84,7 +84,7 @@ def main():
         epoch_start = 0
         prev_acc = 0.0
         model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], \
-            opt_level=args.opt_level, verbosity=0)
+            opt_level=args.opt_level, verbosity=1)
     warper = deforming_medium(args)
     criterion = nn.CrossEntropyLoss().to(device)
     # cyclic learning rate
@@ -154,13 +154,9 @@ def main():
             # else:
             #     scheduler.step()
             
-            if batch_idx > 50:
-                print('==> early break in training')
-                break
-            if batch_idx == 5:
-                save_image(data[0], 'picture/normal.png')
-                save_image(adv[0], 'picture/adv.png')
-                # save_image(delta[0]*8, 'delta.png')
+            # if batch_idx > 10:
+            #     print('==> early break in training')
+            #     break
             
         return (train_loss / batch_idx, 100. * correct / total)
 
@@ -181,7 +177,7 @@ def main():
                 total += target.size(0)
                 correct += (preds_top_class.view(target.shape) == target).sum().item()
 
-                # if batch_idx > 50:
+                # if batch_idx > 10:
                 #     print('==> early break in testing')
                 #     break
         
