@@ -1,2 +1,0 @@
-[2021/07/17 22:45:27] - Namespace(resume=False, prefix='Small adv. training test', seed=59572406, batch_size=232, epochs=20, lr_max=0.001, target=None, rnd_target=False, iteration=20, step_size=0.005, epsilon=1, kernel_size=13, image_size=224, data_directory='../Restricted_ImageNet', opt_level='O1')
-[2021/07/17 22:45:27] - Epoch 	 Seconds 	 	 Train Loss 	 Train Acc
