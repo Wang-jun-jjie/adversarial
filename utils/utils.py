@@ -328,17 +328,18 @@ def AET_apex(model, warper, data, target, optimizer, step, iter=20):
 
     criterion = nn.CrossEntropyLoss().to(device)
 
+    grid.requires_grad = True
     for i in range(iter):
-        grid.requires_grad = True
         adv = warper(data, grid)
         output = model(normalize(adv))
         loss = criterion(output, target)
         with amp.scale_loss(loss, optimizer) as scaled_loss:
             scaled_loss.backward()
-        sign_data_grad = grid.grad.sign()
+        grad = grid.grad.detach()
         # Update adversarial images
-        grid = grid + step*sign_data_grad
-        grid = grid.detach_()
+        grid.data = grid + step*torch.sign(grad)
+        grid.grad.zero_()
+    grid = grid.detach()
     # warp it back to image
     adv = warper(data, grid).detach()
     return adv
