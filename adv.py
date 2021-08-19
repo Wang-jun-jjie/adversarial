@@ -72,7 +72,7 @@ def main():
         model, [optimizer, optimizer2] = amp.initialize(model, [optimizer, optimizer2], \
             opt_level=args.opt_level, verbosity=1)
 
-        checkpoint = torch.load('./checkpoint/' + args.prefix + '.pth')
+        checkpoint = torch.load('/tmp2/aislab/aet_ckpt/' + args.prefix + '.pth')
         prev_acc = checkpoint['acc']
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -186,9 +186,9 @@ def main():
     # Save checkpoint
     def checkpoint(acc, epoch):
         print('==> Saving..')
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-        save_path = './checkpoint/' + args.prefix + '.pth'
+        if not os.path.isdir('/tmp2/aislab/aet_ckpt/'):
+            os.mkdir('/tmp2/aislab/aet_ckpt/')
+        save_path = '/tmp2/aislab/aet_ckpt/' + args.prefix + '_' + epoch + .pth'
         torch.save({
             'epoch': epoch,
             'acc': acc,
