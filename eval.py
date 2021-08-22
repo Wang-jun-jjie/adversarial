@@ -122,6 +122,8 @@ def main():
             # save_image(data[0], './picture/normal.png')
             # save_image(adv[0], './picture/adv.png')
             # save_image(delta[0]*8, './picture/delta.png')
+        if batch_idx == 10:
+            break
         
     print(correct_normal/total)
     print(correct_adv/total)
