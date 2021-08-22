@@ -2,13 +2,19 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-df = pd.read_fwf('./logs/default_O1.log', skiprows=1)
-print(df.head(5))
+df_normal = pd.read_fwf('./logs/default_O1.log', skiprows=1)
+df_adv = pd.read_fwf('./logs/resnet50_adv_O1_arch.log', skiprows=1, skipfooter=1)
 
-plot1 = df[['Train Acc', 'Test Acc']]
+normal = df_normal[['Train Acc', 'Test Acc']]
+normal = normal.rename(columns={'Train Acc': 'Normal Training Accuracy', 'Test Acc': 'Normal Testing Accuracy'})
 
-plot1 = plot1.plot.line()
-fig = plot1.get_figure()
+adv = df_adv[['Train Acc', 'Test Acc']]
+adv = adv.rename(columns={'Train Acc': 'Adv. Training Accuracy', 'Test Acc': 'Adv. Testing Accuracy'})
+
+plot = pd.concat([normal, adv], axis=1)
+
+plot = plot.plot.line()
+fig = plot.get_figure()
 fig.savefig("plots.png")
 
 # # first 40 epochs

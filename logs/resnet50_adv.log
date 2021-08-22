@@ -1,0 +1,2 @@
+[2021/08/23 07:53:02] - Namespace(cuda='0', description='resnet50_adv', prefix='', seed=6869, batch_size=160, epochs=160, lr_max=0.001, target=None, iteration=20, step_size=0.005, epsilon=1, kernel_size=13, image_size=224, dataset_root='/tmp2/dataset/Restricted_ImageNet_A', ckpt_root='/tmp2/aislab/adv_ckpt', opt_level='O1')
+[2021/08/23 07:53:02] - Epoch  Seconds    Train Loss  Train Acc    Test Loss  Test Acc
