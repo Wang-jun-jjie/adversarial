@@ -6,14 +6,9 @@ parser = argparse.ArgumentParser(description='make restricted dataset')
 parser.add_argument('--ori-train', default='/tmp2/dataset/imagenet/ILSVRC/Data/CLS-LOC/train', type=str, help='imagenet training dataset')
 parser.add_argument('--ori-val',   default='/tmp2/dataset/imagenet/ILSVRC/Data/CLS-LOC/val',   type=str, help='imagenet validation dataset')
 parser.add_argument('--class-map', default='/tmp2/dataset/imagenet/LOC_synset_mapping.txt',    type=str, help='imagenet class mapping')
-parser.add_argument('--rst-root',  default='/tmp2/dataset/Restricted_ImageNet',                type=str, help='restricted imagenet root directory')
+parser.add_argument('--rst-root',  default='/tmp2/dataset/Restricted_ImageNet_Madry',                type=str, help='restricted imagenet root directory')
 parser.add_argument('--n-class', '-n', default=10, type=int, help='number of classes for restricted imagenet. (10, 14, or 20, default: 10)')
 args = parser.parse_args()
-
-# trainingset_path='../ImageNet/train'
-# validationset_path='../ImageNet/val'
-# class_mapping='../ImageNet/LOC_synset_mapping.txt'
-# output_path='../Restricted_ImageNet'
 
 def id_2_foldername(definition):
     classes = list()
@@ -43,7 +38,7 @@ def add_class(name, definition):
     for i in definition:
         src_dir = args.ori_val+'/'+i
         copy_tree(src_dir, dest_dir)
-
+# restricted imagenet based on Madry balance restricted imagenet (14 classes)
 def main():
     if not os.path.exists(args.rst_root):
         os.makedirs(args.rst_root)

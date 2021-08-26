@@ -2,8 +2,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
-df_normal = pd.read_fwf('./logs/default_O1.log', skiprows=1)
-df_adv = pd.read_fwf('./logs/resnet50_adv_O1_arch.log', skiprows=1, skipfooter=1)
+df_normal = pd.read_fwf('./logs/resnet50.log', skiprows=1, skipfooter=1, widths=[24, 5, 9, 14, 11, 13, 10])
+df_adv = pd.read_fwf('./logs/resnet50_pgd.log', skiprows=1, skipfooter=1, widths=[24, 5, 9, 14, 11, 13, 10])
+
+print(df_normal.head())
+print(df_normal.columns)
 
 normal = df_normal[['Train Acc', 'Test Acc']]
 normal = normal.rename(columns={'Train Acc': 'Normal Training Accuracy', 'Test Acc': 'Normal Testing Accuracy'})

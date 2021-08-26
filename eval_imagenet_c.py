@@ -18,13 +18,6 @@ parser.add_argument('--lr-max',             default=0.001,          type=float, 
 # parser.add_argument('--momentum', '--mm', default=0.9, type=float, help='momentum for optimizer')
 # parser.add_argument('--weight-decay', '--wd', default=0.0001, type=float, help='weight decay for model training')
 
-parser.add_argument('--target', '-t',       default=None,           type=int,   help='adversarial attack target label')
-# parser.add_argument('--rnd-target', '--rt', action='store_true',                help='non-target attack using random label as target')
-parser.add_argument('--iteration', '-i',    default=20,             type=int,   help='adversarial attack iterations (default: 20)')
-parser.add_argument('--step-size', '--ss',  default=0.005,          type=float, help='step size for adversarial attacks')
-parser.add_argument('--epsilon',            default=1,              type=float, help='epsilon for adversarial attacks')
-parser.add_argument('--kernel-size', '-k',  default=13,             type=int,   help='kernel size for adversarial attacks, must be odd integer')
-
 parser.add_argument('--image-size', '--is', default=224,            type=int,   help='image size (default: 224 for ImageNet)')
 parser.add_argument('--dataset-root', '--ds', default='/tmp2/dataset/Restricted_ImageNet_A', \
     type=str, help='input dataset, default: Restricted Imagenet A')
@@ -47,7 +40,7 @@ from apex import amp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.utils import get_loaders, deforming_medium, normalize, PGD, AET, AET_apex
+from utils.utils import get_loaders, normalize
 
 def main():
     print('pytorch version: ' + torch.__version__)
@@ -58,7 +51,7 @@ def main():
     torch.cuda.manual_seed(args.seed)
     # load dataset (Imagenet)
     train_loader, test_loader = get_loaders(args.dataset_root, args.batch_size, \
-                                            image_size=args.image_size, augment=True)
+                                            image_size=args.image_size, augment=False)
 
     # Load model and optimizer
     model = models.resnet50(pretrained=False, num_classes=10).to(device)
@@ -85,11 +78,9 @@ def main():
     torch.set_rng_state(checkpoint['rng_state'])
 
     criterion = nn.CrossEntropyLoss().to(device)
-    warper = deforming_medium(args)
-    warper.eval()
+
     model.eval()
     
-    # reverse-normalization so the epsilon and alpha is correct
     start_time = time.time()
     correct_normal, correct_adv, correct_adv2, total = 0, 0, 0, 0
     for batch_idx, (data, target) in enumerate(test_loader):
@@ -97,7 +88,7 @@ def main():
         
         adv = AET(model, warper, data, target, step=0.005, iter=20)
         # adv = AET_apex(model, warper, data, target, optimizer=optimizer2, step=0.005, iter=20)
-        adv2, delta = PGD(model, data, target, eps=8/255, alpha=1/255, iter=12)
+        adv2, delta = PGD(model, data, target, eps=8/255, alpha=0.5/255, iter=20)
         # adv, delta = PGD_apex(model, data, target, optimizer=optimizer2, eps=8/255, alpha=0.5/255, iter=20)
         
         with torch.no_grad():

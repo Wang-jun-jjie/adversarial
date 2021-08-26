@@ -5,8 +5,7 @@ from distutils.dir_util import copy_tree
 parser = argparse.ArgumentParser(description='make restricted dataset')
 parser.add_argument('--ori-train', default='/tmp2/dataset/imagenet/ILSVRC/Data/CLS-LOC/train', type=str, help='imagenet training dataset')
 parser.add_argument('--ori-val',   default='/tmp2/dataset/imagenet/ILSVRC/Data/CLS-LOC/val',   type=str, help='imagenet validation dataset')
-# parser.add_argument('--class-map', default='/tmp2/dataset/imagenet/LOC_synset_mapping.txt',    type=str, help='imagenet class mapping')
-parser.add_argument('--rst-root',  default='/tmp2/dataset/Restricted_ImageNet_A',              type=str, help='restricted imagenet root directory')
+parser.add_argument('--rst-root',  default='/tmp2/dataset/Restricted_ImageNet_Hendrycks',              type=str, help='restricted imagenet root directory')
 args = parser.parse_args()
 
 '''
@@ -38,7 +37,7 @@ def add_class(name, subclass_list):
     for c in subclass_list:
         src_dir = args.ori_val+'/'+c
         copy_tree(src_dir, dest_dir)
-
+# restricted imagenet based on Hendrycks imagenet-A w/ 200 classes
 def main():
     if not os.path.exists(args.rst_root):
         os.makedirs(args.rst_root)

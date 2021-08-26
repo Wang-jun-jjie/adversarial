@@ -18,15 +18,14 @@ parser.add_argument('--lr-max',             default=0.001,          type=float, 
 # parser.add_argument('--momentum', '--mm', default=0.9, type=float, help='momentum for optimizer')
 # parser.add_argument('--weight-decay', '--wd', default=0.0001, type=float, help='weight decay for model training')
 
-parser.add_argument('--target', '-t',       default=None,           type=int,    help='adversarial attack target label')
 parser.add_argument('--iteration', '-i',    default=20,             type=int,    help='adversarial attack iterations (default: 20)')
 parser.add_argument('--step-size', '--ss',  default=0.005,          type=float,  help='step size for adversarial attacks')
 parser.add_argument('--epsilon',            default=8/255,          type=float,  help='epsilon for adversarial attacks')
 parser.add_argument('--alpha',              default=0.5/255,        type=float,  help='alpha for adversarial attacks')
 
 parser.add_argument('--image-size', '--is', default=224,            type=int,    help='image size (default: 224 for ImageNet)')
-parser.add_argument('--dataset-root', '--ds', default='/tmp2/dataset/Restricted_ImageNet_A', \
-    type=str, help='input dataset, default: Restricted Imagenet A')
+parser.add_argument('--dataset-root', '--ds', default='/tmp2/dataset/Restricted_ImageNet_Hendrycks', \
+    type=str, help='input dataset, default: Restricted Imagenet Hendrycks A')
 parser.add_argument('--ckpt-root', '--ckpt', default='/tmp2/aislab/adv_ckpt', \
     type=str, help='root directory of checkpoints')
 parser.add_argument('--opt-level', '-o',    default='O1',           type=str,    help='Nvidia apex optimation level (default: O1)')

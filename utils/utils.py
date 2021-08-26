@@ -20,7 +20,7 @@ def normalize(x):
 def inv_normalize(x):
     return _inv_normalize(x)
 
-def get_loaders(data_directory, batch_size, image_size, augment=True, N=2, M=9): # only support imagenet-size image
+def get_loaders(data_directory, batch_size, image_size, testonly=False, augment=True, N=2, M=9): # only support imagenet-size image
     print('==> Preparing dataset..')
     # move normalize into model, don't normalize here, 
     # is better for classic adversarial attacks
@@ -36,17 +36,19 @@ def get_loaders(data_directory, batch_size, image_size, augment=True, N=2, M=9):
         # transforms.Normalize(imagenet_mean, imagenet_std),
     ])
     
-    if augment:
-        # Add RandAugment with N, M(hyperparameter)
-        train_transform.transforms.insert(0, RandAugment(N, M))
-
-    train_dataset = datasets.ImageFolder(root=data_directory+'/train', \
-        transform=train_transform)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size,\
-        shuffle=True, drop_last=True, num_workers=12, pin_memory=True)
     test_dataset = datasets.ImageFolder(root=data_directory+'/val', \
         transform=test_transform)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size,\
+        shuffle=True, drop_last=True, num_workers=12, pin_memory=True)
+    if testonly:
+        return test_loader
+    
+    if augment:
+        # Add RandAugment with N, M(hyperparameter)
+        train_transform.transforms.insert(0, RandAugment(N, M))
+    train_dataset = datasets.ImageFolder(root=data_directory+'/train', \
+        transform=train_transform)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size,\
         shuffle=True, drop_last=True, num_workers=12, pin_memory=True)
     return train_loader, test_loader
 
@@ -294,7 +296,8 @@ def AET(model, warper, data, target, step, iter=20):
     model:      Neural Network to attack
     data:       Input batches
     target:     True labels
-    eps:        Attack budget
+    eps:        Attack budget, already included in warper
+    ks:         kernel size, already included in warper
     step:       step size per iteration
     iter:       Number of iteration
     '''
@@ -317,60 +320,3 @@ def AET(model, warper, data, target, step, iter=20):
     # warp it back to image
     adv = warper(data, grid)
     return adv
-
-def AET_apex(model, warper, data, target, optimizer, step, iter=20):
-    '''
-    Accumulated Elastic Transform (apex)
-    '''
-    data = data.clone().detach().to(device)
-    grid = warper.init_prim_grid().detach().to(device)
-    target = target.clone().detach().to(device)
-
-    criterion = nn.CrossEntropyLoss().to(device)
-
-    grid.requires_grad = True
-    for i in range(iter):
-        adv = warper(data, grid)
-        output = model(normalize(adv))
-        loss = criterion(output, target)
-        with amp.scale_loss(loss, optimizer) as scaled_loss:
-            scaled_loss.backward()
-        grad = grid.grad.detach()
-        # Update adversarial images
-        grid.data = grid + step*torch.sign(grad)
-        grid.grad.zero_()
-    grid = grid.detach()
-    # warp it back to image
-    adv = warper(data, grid).detach()
-    return adv
-
-def PGD_apex(model, data, target, optimizer, eps, alpha, iter=20):
-    '''
-    Project Gradient Descent
-    model:      Neural Network to attack
-    data:       Input batches
-    target:     True labels
-    eps:        Attack budget
-    alpha:      step per iteration
-    iter:       Number of iteration
-    '''
-    data = data.clone().detach().to(device)
-    target = target.clone().detach().to(device)
-
-    criterion = nn.CrossEntropyLoss().to(device)
-    adv = data.clone().detach()
-    # Starting at a uniformly random point
-    adv = adv + torch.empty_like(adv).uniform_(-eps, eps)
-    adv = torch.clamp(adv, min=0, max=1).detach()
-
-    for i in range(iter):
-        adv.requires_grad = True
-        output = model(normalize(adv))
-        loss = criterion(output, target)
-        # Update adversarial images
-        with amp.scale_loss(loss, optimizer) as scaled_loss:
-            scaled_loss.backward()
-        adv = adv.detach() + alpha*adv.grad.sign()
-        delta = torch.clamp(adv-data, min=-eps, max=eps)
-        adv = torch.clamp(data+delta, min=0, max=1).detach_()
-    return adv, delta
