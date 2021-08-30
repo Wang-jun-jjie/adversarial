@@ -19,11 +19,11 @@ parser.add_argument('--lr-max',             default=0.001,          type=float, 
 # parser.add_argument('--weight-decay', '--wd', default=0.0001, type=float, help='weight decay for model training')
 
 parser.add_argument('--image-size', '--is', default=224,            type=int,   help='image size (default: 224 for ImageNet)')
-parser.add_argument('--dataset-root', '--ds', default='/tmp2/dataset/Restricted_ImageNet_A', \
-    type=str, help='input dataset, default: Restricted Imagenet A')
+parser.add_argument('--dataset-root', '--ds', default='/tmp2/dataset/Restricted_ImageNet_C', \
+    type=str, help='input dataset, default: Restricted Imagenet C')
 parser.add_argument('--ckpt-root', '--ckpt', default='/tmp2/aislab/adv_ckpt', \
     type=str, help='root directory of checkpoints')
-parser.add_argument('--opt-level', '-o',    default='O0',           type=str,   help='Nvidia apex optimation level (default: O1)')
+parser.add_argument('--opt-level', '-o',    default='O1',           type=str,   help='Nvidia apex optimation level (default: O1)')
 args = parser.parse_args()
 
 os.environ["CUDA_VISIBLE_DEVICES"]=args.cuda
@@ -49,11 +49,8 @@ def main():
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed(args.seed)
-    # load dataset (Imagenet)
-    train_loader, test_loader = get_loaders(args.dataset_root, args.batch_size, \
-                                            image_size=args.image_size, augment=False)
 
-    # Load model and optimizer
+    # Load resnet50 model structure and optimizer
     model = models.resnet50(pretrained=False, num_classes=10).to(device)
     # Add weight decay into the model
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr_max,
@@ -78,50 +75,48 @@ def main():
     torch.set_rng_state(checkpoint['rng_state'])
 
     criterion = nn.CrossEntropyLoss().to(device)
-
     model.eval()
+
+    # There're 15 testing dataset, each with 5 serverities
+    distortion = {
+        'noise' : ['gaussian_noise', 'shot_noise', 'impulse_noise'],
+        'blur'  : ['defocus_blur', 'glass_blur', 'motion_blur', 'zoom_blur'],
+        'weather' : ['snow', 'frost', 'fog', 'brightness'],
+        'digital' : ['contrast', 'elastic_transform', 'pixelate', 'jpeg_compression']        
+    }
+    path_data = Path(args.dataset_root)
+    average_error = []
+    for ss in distortion: # 4 types of distortion
+        path_dis_cls = path_data / str(ss)
+        for s in distortion[ss]: # distortions
+            path_dis = path_dis_cls / s
+            error_rate_per_types = []
+            for severity in range(1, 6): # severities
+                path_in = path_dis / str(severity)
+                # load the testing dataset
+                dataloader = get_loaders(path_in, args.batch_size, \
+                                            image_size=args.image_size, testonly=True)
+                correct, total = 0, 0
+                with torch.no_grad():
+                    for batch_idx, (data, target) in enumerate(dataloader):
+                        data, target = data.to(device), target.to(device)
+
+                        output_logit = model(normalize(data))
+                        loss = criterion(output_logit, target)
+                        preds = F.softmax(output_logit, dim=1)
+                        preds_top_p, preds_top_class = preds.topk(1, dim=1)
     
-    start_time = time.time()
-    correct_normal, correct_adv, correct_adv2, total = 0, 0, 0, 0
-    for batch_idx, (data, target) in enumerate(test_loader):
-        data, target = data.to(device), target.to(device)
-        
-        adv = AET(model, warper, data, target, step=0.005, iter=20)
-        # adv = AET_apex(model, warper, data, target, optimizer=optimizer2, step=0.005, iter=20)
-        adv2, delta = PGD(model, data, target, eps=8/255, alpha=0.5/255, iter=20)
-        # adv, delta = PGD_apex(model, data, target, optimizer=optimizer2, eps=8/255, alpha=0.5/255, iter=20)
-        
-        with torch.no_grad():
-            y_normal = model(normalize(data))
-            preds_normal = F.softmax(y_normal, dim=1)
-            preds_top_p, preds_top_class = preds_normal.topk(1, dim=1)
-            correct_normal += (preds_top_class.view(target.shape) == target).sum().item()
-
-            y_adv = model(normalize(adv))
-            preds_adv = F.softmax(y_adv, dim=1)
-            preds_top_p, preds_top_class = preds_adv.topk(1, dim=1)
-            correct_adv += (preds_top_class.view(target.shape) == target).sum().item()
-
-            y_adv2 = model(normalize(adv2))
-            preds_adv2 = F.softmax(y_adv2, dim=1)
-            preds_top_p2, preds_top_class2 = preds_adv2.topk(1, dim=1)
-            correct_adv2 += (preds_top_class2.view(target.shape) == target).sum().item()
-            
-            total += target.size(0)
-
-        # if batch_idx == 5:
-            # save_image(data[0], './picture/normal.png')
-            # save_image(adv[0], './picture/adv.png')
-            # save_image(delta[0]*8, './picture/delta.png')
-        if batch_idx == 10:
-            break
-        
-    print(correct_normal/total)
-    print(correct_adv/total)
-    print(correct_adv2/total)
-
-    eval_time = time.time()
-    print('Total eval time: {:.4f} minutes'.format((eval_time-start_time)/60))
+                        total += target.size(0)
+                        correct += (preds_top_class.view(target.shape) == target).sum().item()
+                # Error rate
+                error = (total-correct) / total
+                error_rate_per_types.append(error)
+                print('Type: {}, Name: {}, Severity: {} has error rate {:.5f}'.format(ss, s, severity, error))
+            error = sum(error_rate_per_types)/len(error_rate_per_types)
+            average_error.append(error)
+            print('Type: {}, Name: {} has average error rate {:.5f}'.format(ss, s, error))
+    error = sum(average_error)/len(average_error)
+    print('Average Error Rate: {:.5f}'.format(error))
 
 if __name__ == "__main__":
     main()

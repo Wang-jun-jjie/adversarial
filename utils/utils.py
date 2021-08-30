@@ -21,7 +21,6 @@ def inv_normalize(x):
     return _inv_normalize(x)
 
 def get_loaders(data_directory, batch_size, image_size, testonly=False, augment=True, N=2, M=9): # only support imagenet-size image
-    print('==> Preparing dataset..')
     # move normalize into model, don't normalize here, 
     # is better for classic adversarial attacks
     train_transform = transforms.Compose([
@@ -36,19 +35,24 @@ def get_loaders(data_directory, batch_size, image_size, testonly=False, augment=
         # transforms.Normalize(imagenet_mean, imagenet_std),
     ])
     
-    test_dataset = datasets.ImageFolder(root=data_directory+'/val', \
-        transform=test_transform)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size,\
-        shuffle=True, drop_last=True, num_workers=12, pin_memory=True)
     if testonly:
+        test_dataset = datasets.ImageFolder(root=data_directory, \
+        transform=test_transform)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size,\
+            shuffle=True, drop_last=True, num_workers=12, pin_memory=True)
         return test_loader
     
     if augment:
         # Add RandAugment with N, M(hyperparameter)
         train_transform.transforms.insert(0, RandAugment(N, M))
+    print('==> Preparing dataset..')
     train_dataset = datasets.ImageFolder(root=data_directory+'/train', \
         transform=train_transform)
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size,\
+        shuffle=True, drop_last=True, num_workers=12, pin_memory=True)
+    test_dataset = datasets.ImageFolder(root=data_directory+'/val', \
+        transform=test_transform)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size,\
         shuffle=True, drop_last=True, num_workers=12, pin_memory=True)
     return train_loader, test_loader
 
