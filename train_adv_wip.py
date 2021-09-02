@@ -18,7 +18,6 @@ parser.add_argument('--lr-max',             default=0.001,          type=float, 
 # parser.add_argument('--momentum', '--mm', default=0.9, type=float, help='momentum for optimizer')
 # parser.add_argument('--weight-decay', '--wd', default=0.0001, type=float, help='weight decay for model training')
 
-parser.add_argument('--target', '-t',       default=None,           type=int,    help='adversarial attack target label')
 parser.add_argument('--iteration', '-i',    default=20,             type=int,    help='adversarial attack iterations (default: 20)')
 parser.add_argument('--step-size', '--ss',  default=0.005,          type=float,  help='step size for adversarial attacks')
 parser.add_argument('--epsilon',            default=1,              type=float,  help='epsilon for adversarial attacks')
